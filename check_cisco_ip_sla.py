@@ -6,7 +6,7 @@ import argparse
 from easysnmp import Session
 
 
-class CiscoRttChecker:
+class CiscoIpSlaChecker:
     STATUS_OK = 0
     STATUS_WARNING = 1
     STATUS_CRITICAL = 2
@@ -29,6 +29,7 @@ class CiscoRttChecker:
             self.list_rtt()
         elif "check" == self.options.mode:
             self.check()
+            self.print_output()
 
         return self.status
 
@@ -36,19 +37,49 @@ class CiscoRttChecker:
         parser = argparse.ArgumentParser(
             description="Monitoring check plugin to check Cisco SLA status for one or more entries"
         )
-        parser.add_argument("-H", "--host", help="Hostname or ip-address")
-        parser.add_argument("-v", "--version", default="1", choices=["1", "2"], help="SNMP version (1, 2)")
-        parser.add_argument("-c", "--community", default="public", help="SNMP Community")
-        parser.add_argument("-m", "--mode", choices=["list", "check"], help="Operation mode")
-        parser.add_argument("-e", "--entry",
-                            help="Rtt entry(s) to check, specify as single value or comma-separated list")
-        parser.add_argument("--perf", action="store_true", help="Return perfdata")
-        parser.add_argument("--critical", default=1, type=int, help="Critical threshold in amount of failed Rtt's")
-        parser.add_argument("--warning", default=1, type=int, help="Warning threshold in amount of failed Rtt's")
-        parser.add_argument("--critical-pct", type=float, help="Critical threshold in percentage of failed Rtt's")
-        parser.add_argument("--warning-pct", type=float, help="Warning threshold in percentage of failed Rtt's")
-        parser.add_argument("--verbose", help="Verbose output")
+        parser.add_argument("-H", "--hostname",
+                            help="Hostname or ip-address")
+        parser.add_argument("-v", "--version",
+                            default="1", choices=["1", "2"], help="SNMP version (default '1')")
+        parser.add_argument("-c", "--community",
+                            default="public", help="SNMP Community (default 'public')")
+        parser.add_argument("-m", "--mode",
+                            choices=["list", "check"], help="Operation mode")
+        parser.add_argument("-e", "--entries",
+                            default="all",
+                            help="SLA entry (or entries) to check, specify as 'all', "
+                                 "a single value or comma-separated list")
+        parser.add_argument("--perf",
+                            action="store_true", help="Return perfdata")
+        parser.add_argument("--critical-pct",
+                            default=100.0, type=float,
+                            help="Critical threshold in percentage of failed SLAs (default '100')")
+        parser.add_argument("--warning-pct",
+                            default=50.0, type=float,
+                            help="Warning threshold in percentage of failed SLAs (default '50')")
+        parser.add_argument("--critical",
+                            default=1, type=int, help="Critical threshold in amount of failed SLAs")
+        parser.add_argument("--warning",
+                            default=1, type=int, help="Warning threshold in amount of failed SLAs")
+        parser.add_argument("--verbose",
+                            help="Verbose output")
         self.options = parser.parse_args()
+        if not self.are_options_valid():
+            print("Run with --help for usage information")
+            print("")
+            exit(0)
+
+    def are_options_valid(self):
+        if not self.options.hostname:
+            print("You must specify a hostname")
+            return False
+        if not self.options.mode:
+            print("You must specify a operation mode")
+            return False
+        if self.options.mode == "check" and not self.options.entries:
+            print("You must specify SLA-entries for check-mode (use list-mode to list existing entries)")
+            return False
+        return True
 
     def print_output(self):
         if self.status == self.STATUS_OK:
@@ -61,17 +92,16 @@ class CiscoRttChecker:
             output = 'Unknown'
 
         if self.message:
-            output += ': {0}'.format(self.message)
+            output += ' - {0}'.format(self.message)
 
         if self.perfdata:
-            output += '|{0}'.format(self.perfdata)
+            output += ' | {0}'.format(self.perfdata)
 
         print(output)
 
-
     def create_snmp_session(self):
         self.session = Session(
-            hostname=self.options.host,
+            hostname=self.options.hostname,
             community=self.options.community,
             version=int(self.options.version)
         )
@@ -142,21 +172,30 @@ class CiscoRttChecker:
     def list_rtt(self):
         print("Rtt's available:")
         for rtt_entry in self.rtt_dict:
-            if self.rtt_dict[rtt_entry]["in_active_state"]:
-                print("  {0}".format(rtt_entry))
+            rtt_id = "{0}".format(rtt_entry)
+            if self.rtt_dict[rtt_entry]["tag"]:
+                rtt_id += " (tag: {0})".format(self.rtt_dict[rtt_entry]["tag"])
+            print("  {0}".format(rtt_id))
         for rtt_entry in self.rtt_dict:
+            rtt_id = "{0}".format(rtt_entry)
+            if self.rtt_dict[rtt_entry]["tag"]:
+                rtt_id += " (tag: {0})".format(self.rtt_dict[rtt_entry]["tag"])
             if not self.rtt_dict[rtt_entry]["in_active_state"]:
                 print("  {0} (inactive)".format(rtt_entry))
 
     def check(self):
         messages = []
-        requested_entry_list = self.options.entry.replace(" ", "").split(",")
+        if self.options.entries == "all":
+            requested_entries = self.rtt_dict.keys()
+        else:
+            requested_entries = self.options.entries.replace(" ", "").split(",")
+
         ok_count = 0
         failed_count = 0
 
-        for requested_entry in requested_entry_list:
+        for requested_entry in requested_entries:
             if requested_entry not in self.rtt_dict:
-                self.message = "Rtt {0} does not exist".format(requested_entry)
+                self.message = "SLA {0} does not exist".format(requested_entry)
                 self.status = self.STATUS_UNKNOWN
                 return
             else:
@@ -167,15 +206,15 @@ class CiscoRttChecker:
                 if self.rtt_dict[requested_entry]["in_active_state"]:
                     if self.rtt_dict[requested_entry]["timeout_occured"]:
                         failed_count += 1
-                        messages.append("Timeout for Rtt {0}".format(rtt_id))
+                        messages.append("Timeout for SLA {0}".format(rtt_id))
                     else:
                         ok_count += 1
                 else:
-                    messages.append("Rtt {0} not active".format(rtt_id))
+                    messages.append("SLA {0} not active".format(rtt_id))
                     self.status = self.STATUS_WARNING
 
         if failed_count + ok_count == 0:
-            messages.append("No Rtt's checked")
+            messages.append("No SLAs checked")
             self.status = self.STATUS_UNKNOWN
             return
 
@@ -201,13 +240,11 @@ class CiscoRttChecker:
             self.message = ', '.join(messages)
 
         if self.options.perf:
-            self.perfdata = "'Rtt failed%'={0}%".format(failed_pct)
+            self.perfdata = "'Failed%'={0}%".format(failed_pct)
             if self.options.critical_pct and self.options.warning_pct:
-                self.perfdata += ";{0};{1}".format(self.options.warning_pct, self.options.critical_pct)
+                self.perfdata += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
 
-        self.print_output()
-
-checker = CiscoRttChecker()
+checker = CiscoIpSlaChecker()
 result = checker.run()
 exit(result)
 
