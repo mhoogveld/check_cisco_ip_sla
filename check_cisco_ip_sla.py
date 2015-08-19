@@ -18,7 +18,7 @@ class CiscoIpSlaChecker:
         self.perfdata = None
         self.session = None
         self.options = None
-        self.rtt_dict = None
+        self.rtt_dict = dict()
 
     def run(self):
         self.parse_options()
@@ -127,13 +127,6 @@ class CiscoIpSlaChecker:
                 # rttMonCtrlAdminRttType (3)
                 self.rtt_dict[rtt_entry]['type'] = str(item.value)
 
-        # rtt_rtt_types = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.1.1.3")
-        # for item in rtt_rtt_types:
-        #     oid_parts = str(item.oid).split(".")
-        #     rtt_entry = oid_parts[-1]
-        #     rtt_type = item.value
-        #     self.rtt_dict[rtt_entry] = {"entry": rtt_entry, "type": rtt_type}
-
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
         for item in rtt_ctrl_oper_entries:
             oid_parts = str(item.oid).split(".")
@@ -170,18 +163,26 @@ class CiscoIpSlaChecker:
                     self.rtt_dict[rtt_entry]["in_active_state"] = False
 
     def list_rtt(self):
-        print("Rtt's available:")
+        sla_list = list()
+        inactive_sla_list = list()
+
         for rtt_entry in self.rtt_dict:
             rtt_id = "{0}".format(rtt_entry)
             if self.rtt_dict[rtt_entry]["tag"]:
                 rtt_id += " (tag: {0})".format(self.rtt_dict[rtt_entry]["tag"])
-            print("  {0}".format(rtt_id))
-        for rtt_entry in self.rtt_dict:
-            rtt_id = "{0}".format(rtt_entry)
-            if self.rtt_dict[rtt_entry]["tag"]:
-                rtt_id += " (tag: {0})".format(self.rtt_dict[rtt_entry]["tag"])
-            if not self.rtt_dict[rtt_entry]["in_active_state"]:
-                print("  {0} (inactive)".format(rtt_entry))
+
+            if self.rtt_dict[rtt_entry]["in_active_state"]:
+                sla_list.append("  {0}".format(rtt_id))
+            else:
+                inactive_sla_list.append("  {0} (inactive)".format(rtt_id))
+        sla_list.extend(inactive_sla_list)
+
+        if len(sla_list) == 0:
+            print("No SLAs available")
+        else:
+            print("SLAs available:")
+            for sla in sla_list:
+                print(sla)
 
     def check(self):
         messages = []
