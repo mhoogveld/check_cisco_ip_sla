@@ -233,7 +233,11 @@ class CiscoIpSlaChecker:
                 self.status = self.STATUS_WARNING
 
         if failed_count:
-            messages.insert(0, "{0} Failed ({1}%)".format(failed_count, failed_pct))
+            # Don't show percentage-failed when only checking one SLA
+            if failed_count + ok_count == 1:
+                messages.insert(0, "{0} Failed".format(failed_count))
+            else:
+                messages.insert(0, "{0} Failed ({1}%)".format(failed_count, failed_pct))
         if ok_count:
             messages.insert(0, "{0} OK".format(ok_count))
 
@@ -245,9 +249,11 @@ class CiscoIpSlaChecker:
             if self.options.critical_pct and self.options.warning_pct:
                 self.perfdata += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
 
-checker = CiscoIpSlaChecker()
-result = checker.run()
-exit(result)
+
+if __name__ == '__main__':
+    checker = CiscoIpSlaChecker()
+    result = checker.run()
+    exit(result)
 
 
 # rtt_types = {
