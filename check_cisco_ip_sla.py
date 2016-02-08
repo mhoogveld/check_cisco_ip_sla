@@ -1,9 +1,9 @@
 #!/usr/bin/python
 
-__author__ = "m.hoogveld@elevate.nl"
-
 import argparse
 from easysnmp import Session
+
+__author__ = "m.hoogveld@elevate.nl"
 
 
 class CiscoIpSlaChecker:
@@ -11,6 +11,11 @@ class CiscoIpSlaChecker:
     STATUS_WARNING = 1
     STATUS_CRITICAL = 2
     STATUS_UNKNOWN = 3
+
+    # Verbosity levels
+    V_NONE = 0
+    V_INFO = 1
+    V_DEBUG = 2
 
     def __init__(self):
         self.status = self.STATUS_OK
@@ -52,22 +57,42 @@ class CiscoIpSlaChecker:
         parser.add_argument("--perf",
                             action="store_true", help="Return perfdata")
         parser.add_argument("--critical-pct",
-                            default=100.0, type=float,
+                            default=None, type=float,
                             help="Critical threshold in percentage of failed SLAs (default '100')")
         parser.add_argument("--warning-pct",
-                            default=50.0, type=float,
+                            default=None, type=float,
                             help="Warning threshold in percentage of failed SLAs (default '50')")
         parser.add_argument("--critical",
-                            default=1, type=int, help="Critical threshold in amount of failed SLAs")
+                            default=None, type=int, help="Critical threshold in amount of failed SLAs")
         parser.add_argument("--warning",
-                            default=1, type=int, help="Warning threshold in amount of failed SLAs")
+                            default=None, type=int, help="Warning threshold in amount of failed SLAs")
         parser.add_argument("--verbose",
-                            help="Verbose output")
+                            default=0, type=int, choices=[0, 1, 2], help="Verbose output")
         self.options = parser.parse_args()
         if not self.are_options_valid():
             print("Run with --help for usage information")
             print("")
             exit(0)
+
+        # Set default warning and critical levels if they are not specified at all
+        if self.options.critical is None and self.options.critical_pct is None:
+            self.options.critical_pct = 100
+        if self.options.warning is None and self.options.warning_pct is None:
+            self.options.warning_pct = 50
+
+        self.print_msg(self.V_DEBUG, "Using parameters:")
+        self.print_msg(self.V_DEBUG, " Hostname:     {}".format(self.options.hostname))
+        self.print_msg(self.V_DEBUG, " SNMP-version: {}".format(self.options.version))
+        self.print_msg(self.V_DEBUG, " Community:    {}".format(self.options.community))
+        self.print_msg(self.V_DEBUG, " Mode:         {}".format(self.options.mode))
+        self.print_msg(self.V_DEBUG, " SLA entries:  {}".format(self.options.entries))
+        self.print_msg(self.V_DEBUG, " Perf-data:    {}".format(self.options.perf))
+        self.print_msg(self.V_DEBUG, " Critical-pct: {}".format(self.options.critical_pct))
+        self.print_msg(self.V_DEBUG, " Warning-pct:  {}".format(self.options.warning_pct))
+        self.print_msg(self.V_DEBUG, " Critical:     {}".format(self.options.critical))
+        self.print_msg(self.V_DEBUG, " Warning:      {}".format(self.options.warning))
+        self.print_msg(self.V_DEBUG, " Verbosity:    {}".format(self.options.verbose))
+        self.print_msg(self.V_DEBUG, "")
 
     def are_options_valid(self):
         if not self.options.hostname:
@@ -81,7 +106,19 @@ class CiscoIpSlaChecker:
             return False
         return True
 
+    def print_msg(self, verbosity_level, msg):
+        """
+        :param verbosity_level: Minimum verbosity level needed for the message to be printed
+        :param msg: The message to print
+        :return:
+        """
+        if self.options.verbose >= verbosity_level:
+            print(msg)
+
     def print_output(self):
+        """ Prints the final output in Nagios plugin format
+        :return:
+        """
         if self.status == self.STATUS_OK:
             output = 'OK'
         elif self.status == self.STATUS_WARNING:
@@ -106,7 +143,17 @@ class CiscoIpSlaChecker:
             version=int(self.options.version)
         )
 
+    def add_status(self, status):
+        """ Set the status only if it is more severe than the present status
+        The order of severity being OK, WARNING, CRITICAL, UNKNOWN
+        :param status: Status to set, one of the self.STATUS_xxx constants
+        :return: The current status
+        """
+        if status > self.status:
+            self.status = status
+
     def read_rtt_entries(self):
+        # Get SLA entry info
         self.rtt_dict = dict()
         rtt_ctrl_admin_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.1.1")
         for item in rtt_ctrl_admin_entries:
@@ -127,6 +174,7 @@ class CiscoIpSlaChecker:
                 # rttMonCtrlAdminRttType (3)
                 self.rtt_dict[rtt_entry]['type'] = str(item.value)
 
+        # Get SLA entry status
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
         for item in rtt_ctrl_oper_entries:
             oid_parts = str(item.oid).split(".")
@@ -163,6 +211,9 @@ class CiscoIpSlaChecker:
                     self.rtt_dict[rtt_entry]["in_active_state"] = False
 
     def list_rtt(self):
+        """ Reads the list of available SLA entries for the device and prints out a list
+        :return:
+        """
         sla_list = list()
         inactive_sla_list = list()
 
@@ -197,7 +248,7 @@ class CiscoIpSlaChecker:
         for requested_entry in requested_entries:
             if requested_entry not in self.rtt_dict:
                 self.message = "SLA {0} does not exist".format(requested_entry)
-                self.status = self.STATUS_UNKNOWN
+                self.add_status(self.STATUS_UNKNOWN)
                 return
             else:
                 rtt_id = "{0}".format(requested_entry)
@@ -212,25 +263,26 @@ class CiscoIpSlaChecker:
                         ok_count += 1
                 else:
                     messages.append("SLA {0} not active".format(rtt_id))
-                    self.status = self.STATUS_WARNING
+                    self.add_status(self.STATUS_WARNING)
 
         if failed_count + ok_count == 0:
             messages.append("No SLAs checked")
-            self.status = self.STATUS_UNKNOWN
+            self.add_status(self.STATUS_UNKNOWN)
             return
 
         failed_pct = round(float(failed_count) / (failed_count + ok_count) * 100, 1)
 
-        if self.options.critical_pct or self.options.warning_pct:
-            if self.options.critical_pct and failed_pct >= self.options.critical_pct:
-                self.status = self.STATUS_CRITICAL
-            elif self.options.warning_pct and failed_pct >= self.options.warning_pct:
-                self.status = self.STATUS_WARNING
-        else:
-            if failed_count >= self.options.critical:
-                self.status = self.STATUS_CRITICAL
-            elif failed_count >= self.options.warning:
-                self.status = self.STATUS_WARNING
+        # Check percentage thresholds (if set)
+        if self.options.critical_pct is not None and failed_pct >= self.options.critical_pct:
+            self.add_status(self.STATUS_CRITICAL)
+        if self.options.warning_pct is not None and failed_pct >= self.options.warning_pct:
+            self.add_status(self.STATUS_WARNING)
+
+        # Check absolute thresholds (if set)
+        if self.options.critical is not None and failed_count >= self.options.critical:
+            self.add_status(self.STATUS_CRITICAL)
+        if self.options.warning is not None and failed_count >= self.options.warning:
+            self.add_status(self.STATUS_WARNING)
 
         if failed_count:
             # Don't show percentage-failed when only checking one SLA
