@@ -2,6 +2,7 @@
 
 import argparse
 from easysnmp import Session
+from easysnmp.exceptions import *
 
 __author__ = "m.hoogveld@elevate.nl"
 
@@ -27,13 +28,26 @@ class CiscoIpSlaChecker:
 
     def run(self):
         self.parse_options()
-        self.create_snmp_session()
-        self.read_rtt_entries()
+        try:
+            self.create_snmp_session()
+            self.read_rtt_entries()
 
-        if "list" == self.options.mode:
-            self.list_rtt()
-        elif "check" == self.options.mode:
-            self.check()
+            if "list" == self.options.mode:
+                self.list_rtt()
+            elif "check" == self.options.mode:
+                self.check()
+                self.print_output()
+
+        except EasySNMPTimeoutError as e:
+            self.message = "Timeout while connecting to {} via SNMP.".format(self.options.hostname)
+        except EasySNMPConnectionError as e:
+            self.message = "Error connecting to {} via SNMP, {}".format(self.options.hostname, e)
+        except EasySNMPError as e:
+            self.message = "SNMP error checking {}, {}".format(self.options.hostname, e)
+        except Exception as e:
+            self.message = "Error checking {}, {}".format(self.options.hostname, e)
+        finally:
+            self.add_status(self.STATUS_UNKNOWN)
             self.print_output()
 
         return self.status

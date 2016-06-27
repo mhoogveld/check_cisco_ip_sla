@@ -3,16 +3,16 @@ Monitoring plugin for checking the status of IP SLAs on Cisco devices
 
 ## Overview
 This plugin can check the status of one or more IP SLA entries on a Cisco IOS device. IP SLAs can be used to monitor
-IP service levels for various IP applications and services. See the Cisco website for more details on SLA entries and their use.
-One simple usage example is to monitor a multi-connection failover routing setup to monitor SLAs which ping the other
-end of each line. SLA's can be set up to monitor a line/route and when this line goes down, the corresponding SLA will go down which this plugin can monitor.
-This is just one example, however SLAs can be configured for various other tasks. For more info on IP SLA's, see the manual
-for your Cisco device on IP SLA's. An example is
+IP service levels for various IP applications and services. See the Cisco website for more details on SLA entries
+and their use. One simple usage example is to monitor a multi-connection failover routing setup to monitor SLAs which
+ping the other end of each line. SLA's can be set up to monitor a line/route and when this line goes down, the
+corresponding SLA will go down which this plugin can monitor. This is just one example, however SLAs can be configured
+for various other tasks. For more info on IP SLA's, see the manual for your Cisco device on IP SLA's. An example is
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
 
 ## Installation
 Requirements:
-* Python (version 2.7+, easysnmp requirement)
+* Python version 2 or 3 (tested on 2.7+ or 3.4+)
 * easysnmp (lightweight and fast snmp library for python, see https://github.com/fgimian/easysnmp)
     See http://easysnmp.readthedocs.org/en/latest/ for installation instructions
 
