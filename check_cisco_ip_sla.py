@@ -59,9 +59,26 @@ class CiscoIpSlaChecker:
         parser.add_argument("-H", "--hostname",
                             help="Hostname or ip-address")
         parser.add_argument("-v", "--version",
-                            default="1", choices=["1", "2"], help="SNMP version (default '1')")
+                            default="2", choices=["1", "2", "3"], help="SNMP version (default '2')")
         parser.add_argument("-c", "--community",
                             default="public", help="SNMP Community (default 'public')")
+        parser.add_argument("-u", "--security-name",
+                            help="SNMP v3 security name (username)")
+        parser.add_argument("-l", "--security-level",
+                            default="authPriv", choices=["noAuthNoPriv", "authNoPriv", "authPriv"],
+                            help="SNMP v3 security level (default 'authPriv')")
+        parser.add_argument("-p", "--password",
+                            help="SNMP v3 password (used for both authentication and privacy)")
+        parser.add_argument("-a", "--auth-protocol",
+                            default="SHA", choices=["MD5", "SHA"],
+                            help="SNMP v3 authentication protocol (default 'SHA')")
+        parser.add_argument("-A", "--auth-password",
+                            help="SNMP v3 authentication password, overrides --password if set")
+        parser.add_argument("-x", "--priv-protocol",
+                            default="AES", choices=["DES", "AES"],
+                            help="SNMP v3 privacy protocol (default 'AES')")
+        parser.add_argument("-X", "--priv-password",
+                            help="SNMP v3 privacy password, overrides --password if set")
         parser.add_argument("-m", "--mode",
                             choices=["list", "check"], help="Operation mode")
         parser.add_argument("-e", "--entries",
@@ -83,10 +100,6 @@ class CiscoIpSlaChecker:
         parser.add_argument("--verbose",
                             default=0, type=int, choices=[0, 1, 2], help="Verbose output")
         self.options = parser.parse_args()
-        if not self.are_options_valid():
-            print("Run with --help for usage information")
-            print("")
-            exit(0)
 
         # Set default warning and critical levels if they are not specified at all
         if self.options.critical is None and self.options.critical_pct is None:
@@ -94,18 +107,36 @@ class CiscoIpSlaChecker:
         if self.options.warning is None and self.options.warning_pct is None:
             self.options.warning_pct = 50
 
+        # Copy password to auth-password and priv-password if applicable
+        if self.options.auth_password is None and self.options.password is not None:
+            self.options.auth_password = self.options.password
+        if self.options.priv_password is None and self.options.password is not None:
+            self.options.priv_password = self.options.password
+
+        if not self.are_options_valid():
+            print("Run with --help for usage information")
+            print("")
+            exit(0)
+
         self.print_msg(self.V_DEBUG, "Using parameters:")
-        self.print_msg(self.V_DEBUG, " Hostname:     {}".format(self.options.hostname))
-        self.print_msg(self.V_DEBUG, " SNMP-version: {}".format(self.options.version))
-        self.print_msg(self.V_DEBUG, " Community:    {}".format(self.options.community))
-        self.print_msg(self.V_DEBUG, " Mode:         {}".format(self.options.mode))
-        self.print_msg(self.V_DEBUG, " SLA entries:  {}".format(self.options.entries))
-        self.print_msg(self.V_DEBUG, " Perf-data:    {}".format(self.options.perf))
-        self.print_msg(self.V_DEBUG, " Critical-pct: {}".format(self.options.critical_pct))
-        self.print_msg(self.V_DEBUG, " Warning-pct:  {}".format(self.options.warning_pct))
-        self.print_msg(self.V_DEBUG, " Critical:     {}".format(self.options.critical))
-        self.print_msg(self.V_DEBUG, " Warning:      {}".format(self.options.warning))
-        self.print_msg(self.V_DEBUG, " Verbosity:    {}".format(self.options.verbose))
+        self.print_msg(self.V_DEBUG, " Hostname:        {}".format(self.options.hostname))
+        self.print_msg(self.V_DEBUG, " SNMP-version:    {}".format(self.options.version))
+        self.print_msg(self.V_DEBUG, " Community:       {}".format(self.options.community))
+        self.print_msg(self.V_DEBUG, " Security-name:   {}".format(self.options.security_name))
+        self.print_msg(self.V_DEBUG, " Security-level:  {}".format(self.options.security_level))
+        self.print_msg(self.V_DEBUG, " Password:        {}".format(self.options.password))
+        self.print_msg(self.V_DEBUG, " Auth-protocol:   {}".format(self.options.auth_protocol))
+        self.print_msg(self.V_DEBUG, " Auth-password:   {}".format(self.options.auth_password))
+        self.print_msg(self.V_DEBUG, " Priv-protocol:   {}".format(self.options.priv_protocol))
+        self.print_msg(self.V_DEBUG, " Priv-password:   {}".format(self.options.priv_password))
+        self.print_msg(self.V_DEBUG, " Mode:            {}".format(self.options.mode))
+        self.print_msg(self.V_DEBUG, " SLA entries:     {}".format(self.options.entries))
+        self.print_msg(self.V_DEBUG, " Perf-data:       {}".format(self.options.perf))
+        self.print_msg(self.V_DEBUG, " Critical-pct:    {}".format(self.options.critical_pct))
+        self.print_msg(self.V_DEBUG, " Warning-pct:     {}".format(self.options.warning_pct))
+        self.print_msg(self.V_DEBUG, " Critical:        {}".format(self.options.critical))
+        self.print_msg(self.V_DEBUG, " Warning:         {}".format(self.options.warning))
+        self.print_msg(self.V_DEBUG, " Verbosity:       {}".format(self.options.verbose))
         self.print_msg(self.V_DEBUG, "")
 
     def are_options_valid(self):
@@ -134,19 +165,19 @@ class CiscoIpSlaChecker:
         :return:
         """
         if self.status == self.STATUS_OK:
-            output = 'OK'
+            output = "OK"
         elif self.status == self.STATUS_WARNING:
-            output = 'Warning'
+            output = "Warning"
         elif self.status == self.STATUS_CRITICAL:
-            output = 'Critical'
+            output = "Critical"
         else:
-            output = 'Unknown'
+            output = "Unknown"
 
         if self.message:
-            output += ' - {0}'.format(self.message)
+            output += " - {0}".format(self.message)
 
         if self.perfdata:
-            output += ' | {0}'.format(self.perfdata)
+            output += " | {0}".format(self.perfdata)
 
         print(output)
 
@@ -154,7 +185,13 @@ class CiscoIpSlaChecker:
         self.session = Session(
             hostname=self.options.hostname,
             community=self.options.community,
-            version=int(self.options.version)
+            version=int(self.options.version),
+            security_username=self.options.security_name,
+            security_level=self.options.security_level,
+            auth_protocol=self.options.auth_protocol,
+            auth_password=self.options.auth_password,
+            privacy_protocol=self.options.priv_protocol,
+            privacy_password=self.options.priv_password,
         )
 
     def add_status(self, status):
@@ -180,13 +217,13 @@ class CiscoIpSlaChecker:
 
             if "2" == rtt_info_type:
                 # rttMonCtrlAdminOwner (2)
-                self.rtt_dict[rtt_entry]['owner'] = str(item.value)
+                self.rtt_dict[rtt_entry]["owner"] = str(item.value)
             elif "3" == rtt_info_type:
                 # rttMonCtrlAdminTag (3)
-                self.rtt_dict[rtt_entry]['tag'] = str(item.value)
+                self.rtt_dict[rtt_entry]["tag"] = str(item.value)
             elif "4" == rtt_info_type:
                 # rttMonCtrlAdminRttType (3)
-                self.rtt_dict[rtt_entry]['type'] = str(item.value)
+                self.rtt_dict[rtt_entry]["type"] = str(item.value)
 
         # Get SLA entry status
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
@@ -308,7 +345,7 @@ class CiscoIpSlaChecker:
             messages.insert(0, "{0} OK".format(ok_count))
 
         if messages:
-            self.message = ', '.join(messages)
+            self.message = ", ".join(messages)
 
         if self.options.perf:
             self.perfdata = "'Failed%'={0}%".format(failed_pct)
@@ -316,7 +353,7 @@ class CiscoIpSlaChecker:
                 self.perfdata += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     checker = CiscoIpSlaChecker()
     result = checker.run()
     exit(result)
