@@ -23,7 +23,11 @@ For a complete overview run the check with the parameter "--help".
 
 ```
 $ ./check_cisco_ip_sla.py --help
-usage: check_cisco_ip_sla.py [-h] [-H HOSTNAME] [-v {1,2}] [-c COMMUNITY]
+usage: check_cisco_ip_sla.py [-h] [-H HOSTNAME] [-v {1,2,3}] [-c COMMUNITY]
+                             [-u SECURITY_NAME]
+                             [-l {noAuthNoPriv,authNoPriv,authPriv}]
+                             [-p PASSWORD] [-a {MD5,SHA}] [-A AUTH_PASSWORD]
+                             [-x {DES,AES}] [-X PRIV_PASSWORD]
                              [-m {list,check}] [-e ENTRIES] [--perf]
                              [--critical-pct CRITICAL_PCT]
                              [--warning-pct WARNING_PCT] [--critical CRITICAL]
@@ -35,10 +39,26 @@ optional arguments:
   -h, --help            show this help message and exit
   -H HOSTNAME, --hostname HOSTNAME
                         Hostname or ip-address
-  -v {1,2}, --version {1,2}
-                        SNMP version (default '1')
+  -v {1,2,3}, --version {1,2,3}
+                        SNMP version (default '2')
   -c COMMUNITY, --community COMMUNITY
                         SNMP Community (default 'public')
+  -u SECURITY_NAME, --security-name SECURITY_NAME
+                        SNMP v3 security name (username)
+  -l {noAuthNoPriv,authNoPriv,authPriv}, --security-level {noAuthNoPriv,authNoPriv,authPriv}
+                        SNMP v3 security level (default 'authPriv')
+  -p PASSWORD, --password PASSWORD
+                        SNMP v3 password (used for both authentication and
+                        privacy)
+  -a {MD5,SHA}, --auth-protocol {MD5,SHA}
+                        SNMP v3 authentication protocol (default 'SHA')
+  -A AUTH_PASSWORD, --auth-password AUTH_PASSWORD
+                        SNMP v3 authentication password, overrides --password
+                        if set
+  -x {DES,AES}, --priv-protocol {DES,AES}
+                        SNMP v3 privacy protocol (default 'AES')
+  -X PRIV_PASSWORD, --priv-password PRIV_PASSWORD
+                        SNMP v3 privacy password, overrides --password if set
   -m {list,check}, --mode {list,check}
                         Operation mode
   -e ENTRIES, --entries ENTRIES
@@ -90,10 +110,16 @@ Example output:
 OK - 4 OK
 ```
 
-Check the available disk space of a device
+Check via SNMPv3
 ```
-./check_cisco_ip_sla.py -h nas01.example.com -c nas01.conf -t disk-usage \
-    --disk-usage-warning 80 --disk-usage-critical 90
+./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 3 -m list \
+    --security-name example_user --security-level authPriv --password example_passsword \
+    --auth-protocol SHA --priv-protocol AES
+```
+Example output:
+```
+SLAs available:
+  10 (tag: link)
 ```
 
 ## Nagios configuration examples

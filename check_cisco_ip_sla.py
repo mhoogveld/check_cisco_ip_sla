@@ -19,7 +19,7 @@ class CiscoIpSlaChecker:
     V_DEBUG = 2
 
     def __init__(self):
-        self.status = self.STATUS_OK
+        self.status = None
         self.message = None
         self.perfdata = None
         self.session = None
@@ -31,24 +31,16 @@ class CiscoIpSlaChecker:
         try:
             self.create_snmp_session()
             self.read_rtt_entries()
-
+        except EasySNMPError as e:
+            self.add_status(self.STATUS_UNKNOWN)
+            self.message = "SNMP error checking {}, {}".format(self.options.hostname, e)
+        else:
             if "list" == self.options.mode:
                 self.list_rtt()
             elif "check" == self.options.mode:
                 self.check()
-                self.print_output()
 
-        except EasySNMPTimeoutError as e:
-            self.message = "Timeout while connecting to {} via SNMP.".format(self.options.hostname)
-        except EasySNMPConnectionError as e:
-            self.message = "Error connecting to {} via SNMP, {}".format(self.options.hostname, e)
-        except EasySNMPError as e:
-            self.message = "SNMP error checking {}, {}".format(self.options.hostname, e)
-        except Exception as e:
-            self.message = "Error checking {}, {}".format(self.options.hostname, e)
-        finally:
-            self.add_status(self.STATUS_UNKNOWN)
-            self.print_output()
+        self.print_output()
 
         return self.status
 
@@ -151,33 +143,38 @@ class CiscoIpSlaChecker:
             return False
         return True
 
-    def print_msg(self, verbosity_level, msg):
+    def print_msg(self, minimum_verbosity_level, msg):
         """
-        :param verbosity_level: Minimum verbosity level needed for the message to be printed
+        :param minimum_verbosity_level: Minimum verbosity level needed for the message to be printed
         :param msg: The message to print
         :return:
         """
-        if self.options.verbose >= verbosity_level:
+        if self.options.verbose >= minimum_verbosity_level:
             print(msg)
 
     def print_output(self):
-        """ Prints the final output in Nagios plugin format
+        """ Prints the final output (in Nagios plugin format if self.status is set)
         :return:
         """
+        output = ""
         if self.status == self.STATUS_OK:
             output = "OK"
         elif self.status == self.STATUS_WARNING:
             output = "Warning"
         elif self.status == self.STATUS_CRITICAL:
             output = "Critical"
-        else:
+        elif self.status == self.STATUS_UNKNOWN:
             output = "Unknown"
 
         if self.message:
-            output += " - {0}".format(self.message)
+            if len(output):
+                output += " - "
+            output += self.message
 
         if self.perfdata:
-            output += " | {0}".format(self.perfdata)
+            if len(output):
+                output += " | "
+            output += self.perfdata
 
         print(output)
 
@@ -200,7 +197,7 @@ class CiscoIpSlaChecker:
         :param status: Status to set, one of the self.STATUS_xxx constants
         :return: The current status
         """
-        if status > self.status:
+        if self.status is None or status > self.status:
             self.status = status
 
     def read_rtt_entries(self):
@@ -280,11 +277,11 @@ class CiscoIpSlaChecker:
         sla_list.extend(inactive_sla_list)
 
         if len(sla_list) == 0:
-            print("No SLAs available")
+            self.message = "No SLAs available"
         else:
-            print("SLAs available:")
+            self.message = "SLAs available:\n"
             for sla in sla_list:
-                print(sla)
+                self.message += sla + "\n"
 
     def check(self):
         messages = []
@@ -293,6 +290,8 @@ class CiscoIpSlaChecker:
         else:
             requested_entries = self.options.entries.replace(" ", "").split(",")
 
+        # Initialize status to OK (if status is not set yet)
+        self.add_status(self.STATUS_OK)
         ok_count = 0
         failed_count = 0
 
