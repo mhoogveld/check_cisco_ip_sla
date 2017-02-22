@@ -189,6 +189,7 @@ class CiscoIpSlaChecker:
             auth_password=self.options.auth_password,
             privacy_protocol=self.options.priv_protocol,
             privacy_password=self.options.priv_password,
+            use_numeric=True,
         )
 
     def add_status(self, status):
