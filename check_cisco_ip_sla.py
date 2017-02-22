@@ -1,10 +1,24 @@
 #!/usr/bin/python
 
+"""
+This plugin can check the status of one or more IP SLA entries on a Cisco IOS device.
+IP SLAs can be used to monitor IP service levels for various IP applications and services. See the Cisco website
+for more details on SLA entries and their use. One simple usage example is to monitor a multi-connection
+failover routing setup to monitor SLAs which ping the other end of each line. SLA's can be set up to monitor
+a line/route and when this line goes down, the corresponding SLA will go down which this plugin can monitor.
+This is just one example, however SLAs can be configured for various other tasks.
+For more info on IP SLA's, see the manual for your Cisco device on IP SLA's.
+"""
+
 import argparse
 from easysnmp import Session
 from easysnmp.exceptions import *
 
-__author__ = "m.hoogveld@elevate.nl"
+__author__ = "Maarten Hoogveld"
+__version__ = "1.0.1"
+__email__ = "m.hoogveld@elevate.nl"
+__licence__ = "GPL-3.0"
+__status__ = "Production"
 
 
 class CiscoIpSlaChecker:
@@ -207,8 +221,8 @@ class CiscoIpSlaChecker:
         rtt_ctrl_admin_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.1.1")
         for item in rtt_ctrl_admin_entries:
             oid_parts = str(item.oid).split(".")
-            rtt_entry = oid_parts[-1]
-            rtt_info_type = oid_parts[-2]
+            rtt_info_type = oid_parts[-1]
+            rtt_entry = str(item.oid_index)
 
             if rtt_entry not in self.rtt_dict:
                 self.rtt_dict[rtt_entry] = dict()
@@ -227,8 +241,8 @@ class CiscoIpSlaChecker:
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
         for item in rtt_ctrl_oper_entries:
             oid_parts = str(item.oid).split(".")
-            rtt_entry = oid_parts[-1]
-            rtt_info_type = oid_parts[-2]
+            rtt_info_type = oid_parts[-1]
+            rtt_entry = str(item.oid_index)
 
             if "5" == rtt_info_type:
                 # rttMonCtrlOperConnectionLostOccurred (5)
