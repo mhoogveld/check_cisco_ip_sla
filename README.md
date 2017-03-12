@@ -9,6 +9,20 @@ ping the other end of each line. SLA's can be set up to monitor a line/route and
 corresponding SLA will go down which this plugin can monitor. This is just one example, however SLAs can be configured
 for various other tasks. For more info on IP SLA's, see the manual for your Cisco device on IP SLA's. An example is
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
+At the moment, only rtt-type echo and pathEcho are supported and tested (aka icmp-echo and path-echo). Other types
+(like jitter) need to be implemented or at least tested. Suggestions and/or help is always welcome.
+
+## Changelist
+* v1.0.0 (2016-00-00)
+  * Initial release
+* v1.0.1 (2017-02-00)
+  * Fixed bug which appeared when OID's were returned in text form when 
+the RTT-MIB was installed on the system.
+* v1.0.2 (2017-03-12)
+  * Added round trip time perf data. 
+  * Added warning when checking unsupported IP SLA types.
+  * IMPORTANT backward incompatible change: Repurposed the '--version' parameter from setting the snmp-version to displaying the scripts version. 
+    To specify the snmp version, use '-v' or '--snmp-version'
 
 ## Installation
 Requirements:
@@ -23,8 +37,8 @@ For a complete overview run the check with the parameter "--help".
 
 ```
 $ ./check_cisco_ip_sla.py --help
-usage: check_cisco_ip_sla.py [-h] [-H HOSTNAME] [-v {1,2,3}] [-c COMMUNITY]
-                             [-u SECURITY_NAME]
+usage: check_cisco_ip_sla.py [-h] [--version] [-H HOSTNAME] [-v {1,2,3}]
+                             [-c COMMUNITY] [-u SECURITY_NAME]
                              [-l {noAuthNoPriv,authNoPriv,authPriv}]
                              [-p PASSWORD] [-a {MD5,SHA}] [-A AUTH_PASSWORD]
                              [-x {DES,AES}] [-X PRIV_PASSWORD]
@@ -33,16 +47,20 @@ usage: check_cisco_ip_sla.py [-h] [-H HOSTNAME] [-v {1,2,3}] [-c COMMUNITY]
                              [--warning-pct WARNING_PCT] [--critical CRITICAL]
                              [--warning WARNING] [--verbose {0,1,2}]
 
-Monitoring check plugin to check Cisco SLA status for one or more entries
+Monitoring check plugin to check Cisco SLA status for one or more entries. If
+a checked SLA entry is not in active state, the status is raised to WARNING.
+The script returns the worst status found for each checked SLA entry where
+UNKNOWN is worse than CRITICAL and CRITICAL is worse than WARNING.
 
 optional arguments:
   -h, --help            show this help message and exit
+  --version             The version of this script
   -H HOSTNAME, --hostname HOSTNAME
                         Hostname or ip-address
-  -v {1,2,3}, --version {1,2,3}
+  -v {1,2,3}, --snmp-version {1,2,3}
                         SNMP version (default '2')
   -c COMMUNITY, --community COMMUNITY
-                        SNMP Community (default 'public')
+                        SNMP v1/v2 Community string (default 'public')
   -u SECURITY_NAME, --security-name SECURITY_NAME
                         SNMP v3 security name (username)
   -l {noAuthNoPriv,authNoPriv,authPriv}, --security-level {noAuthNoPriv,authNoPriv,authPriv}
@@ -63,8 +81,9 @@ optional arguments:
                         Operation mode
   -e ENTRIES, --entries ENTRIES
                         SLA entry (or entries) to check, specify as 'all', a
-                        single value or comma-separated list
-  --perf                Return perfdata
+                        single value or comma-separated list (default 'all')
+  --perf                Return performance data (failed percentage, round-trip
+                        times)
   --critical-pct CRITICAL_PCT
                         Critical threshold in percentage of failed SLAs
                         (default '100')
@@ -76,6 +95,8 @@ optional arguments:
   --verbose {0,1,2}     Verbose output
 
 ```
+
+
 
 General use cases:
 Get a list of all SLAs available on a device
@@ -120,6 +141,15 @@ Example output:
 ```
 SLAs available:
   10 (tag: link)
+```
+
+Check with performance data
+```
+./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --perf
+```
+Example output:
+```
+OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rt 10'=1ms 'rt 20'=4ms 'rt 30'=1ms 'rt 40'=12ms
 ```
 
 ## Nagios configuration examples

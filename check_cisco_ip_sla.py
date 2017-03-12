@@ -15,7 +15,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __email__ = "m.hoogveld@elevate.nl"
 __licence__ = "GPL-3.0"
 __status__ = "Production"
@@ -60,14 +60,19 @@ class CiscoIpSlaChecker:
 
     def parse_options(self):
         parser = argparse.ArgumentParser(
-            description="Monitoring check plugin to check Cisco SLA status for one or more entries"
+            description="Monitoring check plugin to check Cisco SLA status for one or more entries. "
+                        "If a checked SLA entry is not in active state, the status is raised to WARNING. "
+                        "The script returns the worst status found for each checked SLA entry where "
+                        "UNKNOWN is worse than CRITICAL and CRITICAL is worse than WARNING."
         )
+        parser.add_argument("--version", action="version", version='%(prog)s {version}'.format(version=__version__),
+                            help="The version of this script")
         parser.add_argument("-H", "--hostname",
                             help="Hostname or ip-address")
-        parser.add_argument("-v", "--version",
+        parser.add_argument("-v", "--snmp-version",
                             default="2", choices=["1", "2", "3"], help="SNMP version (default '2')")
         parser.add_argument("-c", "--community",
-                            default="public", help="SNMP Community (default 'public')")
+                            default="public", help="SNMP v1/v2 Community string (default 'public')")
         parser.add_argument("-u", "--security-name",
                             help="SNMP v3 security name (username)")
         parser.add_argument("-l", "--security-level",
@@ -90,9 +95,9 @@ class CiscoIpSlaChecker:
         parser.add_argument("-e", "--entries",
                             default="all",
                             help="SLA entry (or entries) to check, specify as 'all', "
-                                 "a single value or comma-separated list")
+                                 "a single value or comma-separated list (default 'all')")
         parser.add_argument("--perf",
-                            action="store_true", help="Return perfdata")
+                            action="store_true", help="Return performance data (failed percentage, round-trip times)")
         parser.add_argument("--critical-pct",
                             default=None, type=float,
                             help="Critical threshold in percentage of failed SLAs (default '100')")
@@ -126,7 +131,7 @@ class CiscoIpSlaChecker:
 
         self.print_msg(self.V_DEBUG, "Using parameters:")
         self.print_msg(self.V_DEBUG, " Hostname:        {}".format(self.options.hostname))
-        self.print_msg(self.V_DEBUG, " SNMP-version:    {}".format(self.options.version))
+        self.print_msg(self.V_DEBUG, " SNMP-version:    {}".format(self.options.snmp_version))
         self.print_msg(self.V_DEBUG, " Community:       {}".format(self.options.community))
         self.print_msg(self.V_DEBUG, " Security-name:   {}".format(self.options.security_name))
         self.print_msg(self.V_DEBUG, " Security-level:  {}".format(self.options.security_level))
@@ -196,7 +201,7 @@ class CiscoIpSlaChecker:
         self.session = Session(
             hostname=self.options.hostname,
             community=self.options.community,
-            version=int(self.options.version),
+            version=int(self.options.snmp_version),
             security_username=self.options.security_name,
             security_level=self.options.security_level,
             auth_protocol=self.options.auth_protocol,
@@ -234,8 +239,11 @@ class CiscoIpSlaChecker:
                 # rttMonCtrlAdminTag (3)
                 self.rtt_dict[rtt_entry]["tag"] = str(item.value)
             elif "4" == rtt_info_type:
-                # rttMonCtrlAdminRttType (3)
+                # rttMonCtrlAdminRttType (4)
                 self.rtt_dict[rtt_entry]["type"] = str(item.value)
+            elif "5" == rtt_info_type:
+                # rttMonCtrlAdminThreshold (5)
+                self.rtt_dict[rtt_entry]["threshold"] = str(item.value)
 
         # Get SLA entry status
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
@@ -243,6 +251,10 @@ class CiscoIpSlaChecker:
             oid_parts = str(item.oid).split(".")
             rtt_info_type = oid_parts[-1]
             rtt_entry = str(item.oid_index)
+
+            if "2" == rtt_info_type:
+                # rttMonCtrlOperDiagText (2)
+                self.rtt_dict[rtt_entry]["diag_text"] = str(item.value)
 
             if "5" == rtt_info_type:
                 # rttMonCtrlOperConnectionLostOccurred (5)
@@ -273,6 +285,22 @@ class CiscoIpSlaChecker:
                 else:
                     self.rtt_dict[rtt_entry]["in_active_state"] = False
 
+        # Get SLA entry latest result
+        latest_rtt_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.10.1")
+        for item in latest_rtt_oper_entries:
+            oid_parts = str(item.oid).split(".")
+            rtt_info_type = oid_parts[-1]
+            rtt_entry = str(item.oid_index)
+
+            if "1" == rtt_info_type:
+                # rttMonLatestRttOperCompletionTime (1)
+                self.rtt_dict[rtt_entry]["latest_completion_time"] = str(item.value)
+
+            elif "2" == rtt_info_type:
+                # rttMonLatestRttOperSense (2)
+                # See http://www.circitor.fr/Mibs/Html/CISCO-RTTMON-TC-MIB.php#RttResponseSense
+                self.rtt_dict[rtt_entry]["latest_sense"] = str(item.value)
+
     def list_rtt(self):
         """ Reads the list of available SLA entries for the device and prints out a list
         :return:
@@ -298,12 +326,62 @@ class CiscoIpSlaChecker:
             for sla in sla_list:
                 self.message += sla + "\n"
 
+    @staticmethod
+    def get_rtt_type_description(rtt_type):
+        rtt_type = str(rtt_type)
+        description = "unknown"
+        if rtt_type == "1":
+            description = "echo"
+        elif rtt_type == "2":
+            description = "pathEcho"
+        elif rtt_type == "3":
+            description = "fileIO"
+        elif rtt_type == "4":
+            description = "script"
+        elif rtt_type == "5":
+            description = "udpEcho"
+        elif rtt_type == "6":
+            description = "tcpConnect"
+        elif rtt_type == "7":
+            description = "http"
+        elif rtt_type == "8":
+            description = "dns"
+        elif rtt_type == "9":
+            description = "jitter"
+        elif rtt_type == "10":
+            description = "dlsw"
+        elif rtt_type == "11":
+            description = "dhcp"
+        elif rtt_type == "12":
+            description = "ftp"
+        elif rtt_type == "13":
+            description = "voip"
+        elif rtt_type == "14":
+            description = "rtp"
+        elif rtt_type == "15":
+            description = "lspGroup"
+        elif rtt_type == "16":
+            description = "icmpjitter"
+        elif rtt_type == "17":
+            description = "lspPing"
+        elif rtt_type == "18":
+            description = "lspTrace"
+        elif rtt_type == "19":
+            description = "ethernetPing"
+        elif rtt_type == "20":
+            description = "ethernetJitter"
+        elif rtt_type == "21":
+            description = "lspPingPseudowire"
+
+        return description
+
     def check(self):
         messages = []
         if self.options.entries == "all":
             requested_entries = self.rtt_dict.keys()
         else:
             requested_entries = self.options.entries.replace(" ", "").split(",")
+        requested_entries.sort(key=int)
 
         # Initialize status to OK (if status is not set yet)
         self.add_status(self.STATUS_OK)
@@ -317,13 +395,30 @@ class CiscoIpSlaChecker:
                 return
             else:
                 rtt_id = "{0}".format(requested_entry)
+                rtt_type = self.rtt_dict[requested_entry]["type"]
+                if rtt_type != "1" and rtt_type != "2":
+                    rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
+                    print(
+                        "Warning: RTT type {0} ({1}) not yet supported (entry {2})".format(
+                            rtt_type_description,
+                            rtt_type,
+                            rtt_id
+                        )
+                    )
+
                 if self.rtt_dict[requested_entry]["tag"]:
                     rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
 
                 if self.rtt_dict[requested_entry]["in_active_state"]:
-                    if self.rtt_dict[requested_entry]["timeout_occured"]:
+                    if self.rtt_dict[requested_entry]["conn_lost_occured"]:
+                        failed_count += 1
+                        messages.append("Connection lost for SLA {0}".format(rtt_id))
+                    elif self.rtt_dict[requested_entry]["timeout_occured"]:
                         failed_count += 1
                         messages.append("Timeout for SLA {0}".format(rtt_id))
+                    elif self.rtt_dict[requested_entry]["over_thres_occured"]:
+                        failed_count += 1
+                        messages.append("Threshold exceeded for SLA {0}".format(rtt_id))
                     else:
                         ok_count += 1
                 else:
@@ -366,33 +461,15 @@ class CiscoIpSlaChecker:
             if self.options.critical_pct and self.options.warning_pct:
                 self.perfdata += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
 
+            for requested_entry in requested_entries:
+                if requested_entry in self.rtt_dict:
+                    self.perfdata += " 'rt {0}'={1}ms".format(
+                        requested_entry,
+                        self.rtt_dict[requested_entry]["latest_completion_time"]
+                    )
+
 
 if __name__ == "__main__":
     checker = CiscoIpSlaChecker()
     result = checker.run()
     exit(result)
-
-
-# rtt_types = {
-#     "echo": 1,
-#     "pathEcho": 2,
-#     "fileIO": 3,
-#     "script": 4,
-#     "udpEcho": 5,
-#     "tcpConnect": 6,
-#     "http": 7,
-#     "dns": 8,
-#     "jitter": 9,
-#     "dlsw": 10,
-#     "dhcp": 11,
-#     "ftp": 12,
-#     "voip": 13,
-#     "rtp": 14,
-#     "lspGroup": 15,
-#     "icmpjitter": 16,
-#     "lspPing": 17,
-#     "lspTrace": 18,
-#     "ethernetPing": 19,
-#     "ethernetJitter": 20,
-#     "lspPingPseudowire": 21
-# }
