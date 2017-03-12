@@ -13,9 +13,9 @@ At the moment, only rtt-type echo and pathEcho are supported and tested (aka icm
 (like jitter) need to be implemented or at least tested. Suggestions and/or help is always welcome.
 
 ## Changelist
-* v1.0.0 (2016-00-00)
+* v1.0.0 (2016-02-08)
   * Initial release
-* v1.0.1 (2017-02-00)
+* v1.0.1 (2017-02-22)
   * Fixed bug which appeared when OID's were returned in text form when 
 the RTT-MIB was installed on the system.
 * v1.0.2 (2017-03-12)
