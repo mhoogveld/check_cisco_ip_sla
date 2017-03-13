@@ -259,23 +259,23 @@ class CiscoIpSlaChecker:
             if "5" == rtt_info_type:
                 # rttMonCtrlOperConnectionLostOccurred (5)
                 if item.value == "1":
-                    self.rtt_dict[rtt_entry]["conn_lost_occured"] = True
+                    self.rtt_dict[rtt_entry]["conn_lost_occurred"] = True
                 else:
-                    self.rtt_dict[rtt_entry]["conn_lost_occured"] = False
+                    self.rtt_dict[rtt_entry]["conn_lost_occurred"] = False
 
             elif "6" == rtt_info_type:
                 # rttMonCtrlOperTimeoutOccurred (6)
                 if item.value == "1":
-                    self.rtt_dict[rtt_entry]["timeout_occured"] = True
+                    self.rtt_dict[rtt_entry]["timeout_occurred"] = True
                 else:
-                    self.rtt_dict[rtt_entry]["timeout_occured"] = False
+                    self.rtt_dict[rtt_entry]["timeout_occurred"] = False
 
             elif "7" == rtt_info_type:
                 # rttMonCtrlOperOverThresholdOccurred (7)
                 if item.value == "1":
-                    self.rtt_dict[rtt_entry]["over_thres_occured"] = True
+                    self.rtt_dict[rtt_entry]["over_thres_occurred"] = True
                 else:
-                    self.rtt_dict[rtt_entry]["over_thres_occured"] = False
+                    self.rtt_dict[rtt_entry]["over_thres_occurred"] = False
 
             elif "10" == rtt_info_type:
                 # rttMonCtrlOperState (10)
@@ -410,13 +410,13 @@ class CiscoIpSlaChecker:
                     rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
 
                 if self.rtt_dict[requested_entry]["in_active_state"]:
-                    if self.rtt_dict[requested_entry]["conn_lost_occured"]:
+                    if self.rtt_dict[requested_entry]["conn_lost_occurred"]:
                         failed_count += 1
                         messages.append("Connection lost for SLA {0}".format(rtt_id))
-                    elif self.rtt_dict[requested_entry]["timeout_occured"]:
+                    elif self.rtt_dict[requested_entry]["timeout_occurred"]:
                         failed_count += 1
                         messages.append("Timeout for SLA {0}".format(rtt_id))
-                    elif self.rtt_dict[requested_entry]["over_thres_occured"]:
+                    elif self.rtt_dict[requested_entry]["over_thres_occurred"]:
                         failed_count += 1
                         messages.append("Threshold exceeded for SLA {0}".format(rtt_id))
                     else:
