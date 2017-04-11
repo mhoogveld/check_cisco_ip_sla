@@ -308,23 +308,54 @@ class CiscoIpSlaChecker:
         sla_list = list()
         inactive_sla_list = list()
 
-        for rtt_entry in self.rtt_dict:
-            rtt_id = "{0}".format(rtt_entry)
-            if self.rtt_dict[rtt_entry]["tag"]:
-                rtt_id += " (tag: {0})".format(self.rtt_dict[rtt_entry]["tag"])
+        col_width_id = 0
+        col_width_type = 0
+        col_width_tag = 0
 
-            if self.rtt_dict[rtt_entry]["in_active_state"]:
-                sla_list.append("  {0}".format(rtt_id))
+        rtt_table = list()
+        for rtt_entry in self.rtt_dict:
+            rtt_item = dict()
+            rtt_item["id"] = str(rtt_entry)
+            rtt_item["type"] = CiscoIpSlaChecker.get_rtt_type_description(self.rtt_dict[rtt_entry]["type"])
+            rtt_item["tag"] = str(self.rtt_dict[rtt_entry]["tag"])
+            rtt_item["active"] = self.rtt_dict[rtt_entry]["in_active_state"]
+            if not rtt_item["active"]:
+                rtt_item["tag"] += " (inactive)"
+
+            col_width_id = max(col_width_id, len(str(rtt_item["id"])))
+            col_width_type = max(col_width_type, len(str(rtt_item["type"])))
+            col_width_tag = max(col_width_tag, len(str(rtt_item["tag"])))
+
+            rtt_table.append(rtt_item)
+
+        for rtt_item in rtt_table:
+            rtt_line = "  " + rtt_item["id"].rjust(col_width_id)
+            rtt_line += "  " + rtt_item["type"].ljust(col_width_type)
+            if rtt_item["tag"]:
+                rtt_line += "  " + rtt_item["tag"]
+
+            if rtt_item["active"]:
+                sla_list.append(rtt_line)
             else:
-                inactive_sla_list.append("  {0} (inactive)".format(rtt_id))
+                inactive_sla_list.append(rtt_line)
+
+        # Add the inactive SLA's at the end of the list
         sla_list.extend(inactive_sla_list)
+
+        col_headers = "  " + "ID".rjust(col_width_id)
+        col_headers += "  " + "Type".ljust(col_width_type)
+        col_headers += "  " + "Tag\n"
+        col_headers += "  " + ("-" * col_width_id)
+        col_headers += "  " + ("-" * col_width_type)
+        col_headers += "  " + ("-" * col_width_tag) + "\n"
 
         if len(sla_list) == 0:
             self.message = "No SLAs available"
         else:
             self.message = "SLAs available:\n"
+            self.message += col_headers
             for sla in sla_list:
-                self.message += sla + "\n"
+                self.message += str(sla) + "\n"
 
     @staticmethod
     def get_rtt_type_description(rtt_type):
