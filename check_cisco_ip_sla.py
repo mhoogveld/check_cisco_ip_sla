@@ -32,13 +32,40 @@ class CiscoIpSlaChecker:
     V_INFO = 1
     V_DEBUG = 2
 
+    rtt_types = {
+        1: 'echo',
+        2: 'pathEcho',
+        3: 'fileIO',
+        4: 'script',
+        5: 'udpEcho',
+        6: 'tcpConnect',
+        7: 'http',
+        8: 'dns',
+        9: 'jitter',
+        10: 'dlsw',
+        11: 'dhcp',
+        12: 'ftp',
+        13: 'voip',
+        14: 'rtp',
+        15: 'lspGroup',
+        16: 'icmpJitter',
+        17: 'lspPing',
+        18: 'lspTrace',
+        19: 'ethernetPing',
+        20: 'ethernetJitter',
+        21: 'lspPingPseudwire',
+    }
+
     def __init__(self):
         self.status = None
         self.message = None
         self.perfdata = None
         self.session = None
         self.options = None
-        self.rtt_dict = dict()
+        self.rtt_dict = {
+            1: 'jitter',
+            2: 'asd'
+        }
 
     def run(self):
         self.parse_options()
@@ -221,6 +248,7 @@ class CiscoIpSlaChecker:
             self.status = status
 
     def read_rtt_entries(self):
+        """ Reads all RTT entries and stores found data in self.rtt_dict """
         # Get SLA entry info
         self.rtt_dict = dict()
         rtt_ctrl_admin_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.1.1")
@@ -301,6 +329,176 @@ class CiscoIpSlaChecker:
                 # See http://www.circitor.fr/Mibs/Html/CISCO-RTTMON-TC-MIB.php#RttResponseSense
                 self.rtt_dict[rtt_entry]["latest_sense"] = str(item.value)
 
+        # Get Jitter specific data (See "-- LatestJitterOper Table" in MIB)
+        latest_jitter_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.5.2.1")
+        for item in latest_jitter_oper_entries:
+            oid_parts = str(item.oid).split(".")
+            rtt_info_type = oid_parts[-1]
+            rtt_entry = str(item.oid_index)
+            latest_jitter = dict()
+
+            if "1" == rtt_info_type:
+                # rttMonLatestJitterOperNumOfRTT (1)
+                latest_jitter["num_of_rtt"] = str(item.value)
+
+            elif "2" == rtt_info_type:
+                # rttMonLatestJitterOperRTTSum (2)
+                latest_jitter["rtt_sum"] = str(item.value)
+
+            elif "3" == rtt_info_type:
+                # rttMonLatestJitterOperRTTSum2 (3)
+                latest_jitter["rtt_sum2"] = str(item.value)
+
+            elif "4" == rtt_info_type:
+                # rttMonLatestJitterOperRTTMin (4)
+                latest_jitter["rtt_min"] = str(item.value)
+
+            elif "5" == rtt_info_type:
+                # rttMonLatestJitterOperRTTMax (5)
+                latest_jitter["rtt_max"] = str(item.value)
+
+            elif "6" == rtt_info_type:
+                # rttMonLatestJitterOperMinOfPositivesSD (6)
+                latest_jitter["min_of_positives_SD"] = str(item.value)
+
+            elif "7" == rtt_info_type:
+                # rttMonLatestJitterOperMaxOfPositivesSD (7)
+                latest_jitter["max_of_positives_SD"] = str(item.value)
+
+            elif "8" == rtt_info_type:
+                # rttMonLatestJitterOperNumOfPositivesSD (8)
+                latest_jitter["num_of_positives_SD"] = str(item.value)
+
+            elif "11" == rtt_info_type:
+                # rttMonLatestJitterOperMinOfNegativesSD (11)
+                latest_jitter["min_of_negatives_SD"] = str(item.value)
+
+            elif "12" == rtt_info_type:
+                # rttMonLatestJitterOperMaxOfNegativesSD (12)
+                latest_jitter["max_of_negatives_SD"] = str(item.value)
+
+            elif "13" == rtt_info_type:
+                # rttMonLatestJitterOperNumOfNegativesSD (13)
+                latest_jitter["num_of_negatives_SD"] = str(item.value)
+
+            elif "16" == rtt_info_type:
+                # rttMonLatestJitterOperMinOfPositivesDS (16)
+                latest_jitter["min_of_positives_DS"] = str(item.value)
+
+            elif "17" == rtt_info_type:
+                # rttMonLatestJitterOperMaxOfPositivesDS (17)
+                latest_jitter["max_of_positives_DS"] = str(item.value)
+
+            elif "18" == rtt_info_type:
+                # rttMonLatestJitterOperNumOfPositivesDS (18)
+                latest_jitter["num_of_positives_DS"] = str(item.value)
+
+            elif "21" == rtt_info_type:
+                # rttMonLatestJitterOperMinOfNegativesDS (21)
+                latest_jitter["min_of_negatives_DS"] = str(item.value)
+
+            elif "22" == rtt_info_type:
+                # rttMonLatestJitterOperMaxOfNegativesDS (22)
+                latest_jitter["max_of_negatives_DS"] = str(item.value)
+
+            elif "23" == rtt_info_type:
+                # rttMonLatestJitterOperNumOfNegativesDS (23)
+                latest_jitter["num_of_negatives_DS"] = str(item.value)
+
+            elif "26" == rtt_info_type:
+                # rttMonLatestJitterOperPacketLossSD (26)
+                latest_jitter["packet_loss_SD"] = str(item.value)
+
+            elif "27" == rtt_info_type:
+                # rttMonLatestJitterOperPacketLossDS (27)
+                latest_jitter["packet_loss_DS"] = str(item.value)
+
+            elif "28" == rtt_info_type:
+                # rttMonLatestJitterOperPacketOutOfSequence (28)
+                latest_jitter["packet_out_of_seq"] = str(item.value)
+
+            elif "29" == rtt_info_type:
+                # rttMonLatestJitterOperPacketMIA (29)
+                latest_jitter["packet_mia"] = str(item.value)
+
+            elif "30" == rtt_info_type:
+                # rttMonLatestJitterOperPacketLateArrival (30)
+                latest_jitter["packet_late_arrival"] = str(item.value)
+
+            elif "31" == rtt_info_type:
+                # rttMonLatestJitterOperSense (31)
+                latest_jitter["sense"] = str(item.value)
+
+            elif "32" == rtt_info_type:
+                # rttMonLatestJitterErrorSenseDescription (32)
+                latest_jitter["sense_description"] = str(item.value)
+
+            # One way latency skipped
+
+            elif "42" == rtt_info_type:
+                # rttMonLatestJitterOperMOS (42)
+                latest_jitter["MOS"] = str(item.value)
+
+            elif "43" == rtt_info_type:
+                # rttMonLatestJitterOperICPIF (43)
+                latest_jitter["ICPIF"] = str(item.value)
+
+            elif "46" == rtt_info_type:
+                # rttMonLatestJitterOperAvgJitter (46)
+                latest_jitter["avg_jitter"] = str(item.value)
+
+            elif "47" == rtt_info_type:
+                # rttMonLatestJitterOperAvgSDJ (47)
+                latest_jitter["avg_jitter_SD"] = str(item.value)
+
+            elif "48" == rtt_info_type:
+                # rttMonLatestJitterOperAvgDSJ (48)
+                latest_jitter["avg_jitter_DS"] = str(item.value)
+
+            elif "49" == rtt_info_type:
+                # rttMonLatestJitterOperOWAvgSD (49)
+                latest_jitter["avg_latency_SD"] = str(item.value)
+
+            elif "50" == rtt_info_type:
+                # rttMonLatestJitterOperOWAvgDS (50)
+                latest_jitter["avg_latency_DS"] = str(item.value)
+
+            elif "51" == rtt_info_type:
+                # rttMonLatestJitterOperNTPState (51)
+                latest_jitter["ntp_sync"] = (str(item.value) == "1")
+
+            elif "53" == rtt_info_type:
+                # rttMonLatestJitterOperRTTSumHigh (53)
+                latest_jitter["rtt_sum_high"] = str(item.value)
+
+            elif "54" == rtt_info_type:
+                # rttMonLatestJitterOperRTTSum2High (54)
+                latest_jitter["rtt_sum2_high"] = str(item.value)
+
+            elif "59" == rtt_info_type:
+                # rttMonLatestJitterOperNumOverThresh (59)
+                latest_jitter["num_over_threshold"] = str(item.value)
+
+            # Merge high- and low bits for applicable fields
+            try:
+                if int(latest_jitter["rtt_sum_high"]) > 0:
+                    latest_jitter["rtt_sum"] = \
+                        str(int(latest_jitter["rtt_sum"]) + (int(latest_jitter["rtt_sum_high"]) << 32))
+                    del latest_jitter["rtt_sum_high"]
+            except ValueError:
+                pass
+
+            try:
+                if int(latest_jitter["rtt_sum2_high"]) > 0:
+                    latest_jitter["rtt_sum2"] = \
+                        str(int(latest_jitter["rtt_sum2"]) + (int(latest_jitter["rtt_sum2_high"]) << 32))
+                    del latest_jitter["rtt_sum2_high"]
+            except ValueError:
+                pass
+
+            # Add the latest jitter into to the dict
+            self.rtt_dict[rtt_entry]["latest_jitter"] = latest_jitter
+
     def list_rtt(self):
         """ Reads the list of available SLA entries for the device and prints out a list
         :return:
@@ -359,52 +557,18 @@ class CiscoIpSlaChecker:
 
     @staticmethod
     def get_rtt_type_description(rtt_type):
-        rtt_type = str(rtt_type)
+        rtt_type = int(rtt_type)
         description = "unknown"
-        if rtt_type == "1":
-            description = "echo"
-        elif rtt_type == "2":
-            description = "pathEcho"
-        elif rtt_type == "3":
-            description = "fileIO"
-        elif rtt_type == "4":
-            description = "script"
-        elif rtt_type == "5":
-            description = "udpEcho"
-        elif rtt_type == "6":
-            description = "tcpConnect"
-        elif rtt_type == "7":
-            description = "http"
-        elif rtt_type == "8":
-            description = "dns"
-        elif rtt_type == "9":
-            description = "jitter"
-        elif rtt_type == "10":
-            description = "dlsw"
-        elif rtt_type == "11":
-            description = "dhcp"
-        elif rtt_type == "12":
-            description = "ftp"
-        elif rtt_type == "13":
-            description = "voip"
-        elif rtt_type == "14":
-            description = "rtp"
-        elif rtt_type == "15":
-            description = "lspGroup"
-        elif rtt_type == "16":
-            description = "icmpjitter"
-        elif rtt_type == "17":
-            description = "lspPing"
-        elif rtt_type == "18":
-            description = "lspTrace"
-        elif rtt_type == "19":
-            description = "ethernetPing"
-        elif rtt_type == "20":
-            description = "ethernetJitter"
-        elif rtt_type == "21":
-            description = "lspPingPseudowire"
-
+        if rtt_type in CiscoIpSlaChecker.rtt_types:
+            description = CiscoIpSlaChecker.rtt_types[rtt_type]
         return description
+
+    @staticmethod
+    def get_rtt_type_id(rtt_type_description):
+        for rtt_type_id in CiscoIpSlaChecker.rtt_types:
+            if rtt_type_description == CiscoIpSlaChecker.rtt_types[rtt_type_id]:
+                return rtt_type_id
+        return 0
 
     def check(self):
         messages = []
@@ -424,37 +588,42 @@ class CiscoIpSlaChecker:
                 self.message = "SLA {0} does not exist".format(requested_entry)
                 self.add_status(self.STATUS_UNKNOWN)
                 return
-            else:
-                rtt_id = "{0}".format(requested_entry)
-                rtt_type = self.rtt_dict[requested_entry]["type"]
-                if rtt_type != "1" and rtt_type != "2":
-                    rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
-                    print(
-                        "Warning: RTT type {0} ({1}) not yet supported (entry {2})".format(
-                            rtt_type_description,
-                            rtt_type,
-                            rtt_id
-                        )
+
+        if not self.is_rtt_type_combination_supported(requested_entries):
+            # TODO : DO SOMETHING!!!
+            pass
+
+        for requested_entry in requested_entries:
+            rtt_id = "{0}".format(requested_entry)
+            rtt_type = self.rtt_dict[requested_entry]["type"]
+            if rtt_type != "1" and rtt_type != "2":
+                rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
+                print(
+                    "Warning: RTT type {0} ({1}) not yet supported (entry {2})".format(
+                        rtt_type_description,
+                        rtt_type,
+                        rtt_id
                     )
+                )
 
-                if self.rtt_dict[requested_entry]["tag"]:
-                    rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
+            if self.rtt_dict[requested_entry]["tag"]:
+                rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
 
-                if self.rtt_dict[requested_entry]["in_active_state"]:
-                    if self.rtt_dict[requested_entry]["conn_lost_occurred"]:
-                        failed_count += 1
-                        messages.append("Connection lost for SLA {0}".format(rtt_id))
-                    elif self.rtt_dict[requested_entry]["timeout_occurred"]:
-                        failed_count += 1
-                        messages.append("Timeout for SLA {0}".format(rtt_id))
-                    elif self.rtt_dict[requested_entry]["over_thres_occurred"]:
-                        failed_count += 1
-                        messages.append("Threshold exceeded for SLA {0}".format(rtt_id))
-                    else:
-                        ok_count += 1
+            if self.rtt_dict[requested_entry]["in_active_state"]:
+                if self.rtt_dict[requested_entry]["conn_lost_occurred"]:
+                    failed_count += 1
+                    messages.append("Connection lost for SLA {0}".format(rtt_id))
+                elif self.rtt_dict[requested_entry]["timeout_occurred"]:
+                    failed_count += 1
+                    messages.append("Timeout for SLA {0}".format(rtt_id))
+                elif self.rtt_dict[requested_entry]["over_thres_occurred"]:
+                    failed_count += 1
+                    messages.append("Threshold exceeded for SLA {0}".format(rtt_id))
                 else:
-                    messages.append("SLA {0} not active".format(rtt_id))
-                    self.add_status(self.STATUS_WARNING)
+                    ok_count += 1
+            else:
+                messages.append("SLA {0} not active".format(rtt_id))
+                self.add_status(self.STATUS_WARNING)
 
         if failed_count + ok_count == 0:
             messages.append("No SLAs checked")
