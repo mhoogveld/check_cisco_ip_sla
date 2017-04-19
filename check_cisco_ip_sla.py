@@ -53,7 +53,7 @@ class CiscoIpSlaChecker:
         18: 'lspTrace',
         19: 'ethernetPing',
         20: 'ethernetJitter',
-        21: 'lspPingPseudwire',
+        21: 'lspPingPseudowire',
     }
 
     def __init__(self):
@@ -62,10 +62,7 @@ class CiscoIpSlaChecker:
         self.perfdata = None
         self.session = None
         self.options = None
-        self.rtt_dict = {
-            1: 'jitter',
-            2: 'asd'
-        }
+        self.rtt_dict = dict()
 
     def run(self):
         self.parse_options()
