@@ -13,6 +13,7 @@ For more info on IP SLA's, see the manual for your Cisco device on IP SLA's.
 import argparse
 from easysnmp import Session
 from easysnmp.exceptions import *
+from collections import Counter
 
 __author__ = "Maarten Hoogveld"
 __version__ = "1.0.2"
@@ -33,27 +34,27 @@ class CiscoIpSlaChecker:
     V_DEBUG = 2
 
     rtt_types = {
-        1: 'echo',
-        2: 'pathEcho',
-        3: 'fileIO',
-        4: 'script',
-        5: 'udpEcho',
-        6: 'tcpConnect',
-        7: 'http',
-        8: 'dns',
-        9: 'jitter',
-        10: 'dlsw',
-        11: 'dhcp',
-        12: 'ftp',
-        13: 'voip',
-        14: 'rtp',
-        15: 'lspGroup',
-        16: 'icmpJitter',
-        17: 'lspPing',
-        18: 'lspTrace',
-        19: 'ethernetPing',
-        20: 'ethernetJitter',
-        21: 'lspPingPseudowire',
+        1: "echo",
+        2: "pathEcho",
+        3: "fileIO",
+        4: "script",
+        5: "udpEcho",
+        6: "tcpConnect",
+        7: "http",
+        8: "dns",
+        9: "jitter",
+        10: "dlsw",
+        11: "dhcp",
+        12: "ftp",
+        13: "voip",
+        14: "rtp",
+        15: "lspGroup",
+        16: "icmpJitter",
+        17: "lspPing",
+        18: "lspTrace",
+        19: "ethernetPing",
+        20: "ethernetJitter",
+        21: "lspPingPseudowire",
     }
 
     def __init__(self):
@@ -89,7 +90,7 @@ class CiscoIpSlaChecker:
                         "The script returns the worst status found for each checked SLA entry where "
                         "UNKNOWN is worse than CRITICAL and CRITICAL is worse than WARNING."
         )
-        parser.add_argument("--version", action="version", version='%(prog)s {version}'.format(version=__version__),
+        parser.add_argument("--version", action="version", version="%(prog)s {version}".format(version=__version__),
                             help="The version of this script")
         parser.add_argument("-H", "--hostname",
                             help="Hostname or ip-address")
@@ -567,6 +568,41 @@ class CiscoIpSlaChecker:
                 return rtt_type_id
         return 0
 
+    @staticmethod
+    def is_rtt_type_supported(rtt_type):
+        supported_rtt_types = [
+            CiscoIpSlaChecker.get_rtt_type_id("echo"),
+            CiscoIpSlaChecker.get_rtt_type_id("pathEcho"),
+            CiscoIpSlaChecker.get_rtt_type_id("jitter"),
+        ]
+        return rtt_type in supported_rtt_types
+
+    def check_requested_rtt_entries_types(self, requested_entries):
+        rtt_type_count = Counter()
+        for requested_entry in requested_entries:
+            if requested_entry not in self.rtt_dict:
+                self.message = "SLA {0} does not exist".format(requested_entry)
+                self.add_status(self.STATUS_UNKNOWN)
+                return False
+
+            rtt_type = self.rtt_dict[requested_entry]["type"]
+            rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
+
+            if not CiscoIpSlaChecker.is_rtt_type_supported(rtt_type):
+                msg = "SLA {0} is of type {1} ({2}) which is not supported."
+                self.message = msg.format(requested_entry,
+                                          rtt_type_description,
+                                          rtt_type)
+                self.add_status(self.STATUS_UNKNOWN)
+                return False
+
+            rtt_type_count[rtt_type] += 1
+
+        if len(rtt_type_count) > 1:
+            self.message = "Checking multiple SLA entries is supported, but only if they are of the same type."
+            self.add_status(self.STATUS_UNKNOWN)
+            return False
+
     def check(self):
         messages = []
         if self.options.entries == "all":
@@ -580,28 +616,12 @@ class CiscoIpSlaChecker:
         ok_count = 0
         failed_count = 0
 
-        for requested_entry in requested_entries:
-            if requested_entry not in self.rtt_dict:
-                self.message = "SLA {0} does not exist".format(requested_entry)
-                self.add_status(self.STATUS_UNKNOWN)
-                return
-
-        if not self.is_rtt_type_combination_supported(requested_entries):
-            # TODO : DO SOMETHING!!!
-            pass
+        if not self.check_requested_rtt_entries_types(requested_entries):
+            return
 
         for requested_entry in requested_entries:
-            rtt_id = "{0}".format(requested_entry)
+            rtt_id = str(requested_entry)
             rtt_type = self.rtt_dict[requested_entry]["type"]
-            if rtt_type != "1" and rtt_type != "2":
-                rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
-                print(
-                    "Warning: RTT type {0} ({1}) not yet supported (entry {2})".format(
-                        rtt_type_description,
-                        rtt_type,
-                        rtt_id
-                    )
-                )
 
             if self.rtt_dict[requested_entry]["tag"]:
                 rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
@@ -621,6 +641,23 @@ class CiscoIpSlaChecker:
             else:
                 messages.append("SLA {0} not active".format(rtt_id))
                 self.add_status(self.STATUS_WARNING)
+
+            if rtt_type == self.get_rtt_type_id("jitter"):
+                try:
+                    latest_mos = int(self.rtt_dict[requested_entry]["latest_jitter"]["MOS"])
+                except ValueError:
+                    latest_mos = None
+
+                # Check thresholds (if set)
+                if latest_mos is None:
+                    self.add_status(self.STATUS_UNKNOWN)
+                    self.message = "MOS not known for SLA {0}, but threshold is set".format(rtt_id)
+                elif self.options.critical is not None and latest_mos >= self.options.critical:
+                    self.add_status(self.STATUS_CRITICAL)
+                    self.message = "MOS is over critical threshold for SLA {0}".format(rtt_id)
+                elif self.options.warning is not None and latest_mos >= self.options.warning:
+                    self.add_status(self.STATUS_WARNING)
+                    self.message = "MOS is over warning threshold for SLA {0}".format(rtt_id)
 
         if failed_count + ok_count == 0:
             messages.append("No SLAs checked")
