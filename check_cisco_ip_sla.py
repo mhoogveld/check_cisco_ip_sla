@@ -14,6 +14,7 @@ import argparse
 from easysnmp import Session
 from easysnmp.exceptions import *
 from collections import Counter
+from decimal import *
 
 __author__ = "Maarten Hoogveld"
 __version__ = "1.0.2"
@@ -133,6 +134,10 @@ class CiscoIpSlaChecker:
                             default=None, type=int, help="Critical threshold in amount of failed SLAs")
         parser.add_argument("--warning",
                             default=None, type=int, help="Warning threshold in amount of failed SLAs")
+        parser.add_argument("--critical-mos",
+                            default=None, type=int, help="Critical threshold for the MOS value of jitter SLAs")
+        parser.add_argument("--warning-mos",
+                            default=None, type=int, help="Warning threshold for the MOS value of jitter SLAs")
         parser.add_argument("--verbose",
                             default=0, type=int, choices=[0, 1, 2], help="Verbose output")
         self.options = parser.parse_args()
@@ -245,6 +250,12 @@ class CiscoIpSlaChecker:
         if self.status is None or status > self.status:
             self.status = status
 
+    def add_message(self, message):
+        self.message += message
+
+    def add_perfdata(self, perfdata):
+        self.perdata += perfdata
+
     def read_rtt_entries(self):
         """ Reads all RTT entries and stores found data in self.rtt_dict """
         # Get SLA entry info
@@ -328,171 +339,180 @@ class CiscoIpSlaChecker:
                 self.rtt_dict[rtt_entry]["latest_sense"] = str(item.value)
 
         # Get Jitter specific data (See "-- LatestJitterOper Table" in MIB)
+        latest_jitters = dict()
         latest_jitter_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.5.2.1")
         for item in latest_jitter_oper_entries:
             oid_parts = str(item.oid).split(".")
             rtt_info_type = oid_parts[-1]
             rtt_entry = str(item.oid_index)
-            latest_jitter = dict()
 
-            if "1" == rtt_info_type:
-                # rttMonLatestJitterOperNumOfRTT (1)
-                latest_jitter["num_of_rtt"] = str(item.value)
+            if not rtt_entry in latest_jitters:
+                latest_jitters[rtt_entry] = dict()
 
-            elif "2" == rtt_info_type:
-                # rttMonLatestJitterOperRTTSum (2)
-                latest_jitter["rtt_sum"] = str(item.value)
+            try:
+                if "1" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOfRTT (1)
+                    latest_jitters[rtt_entry]["num_of_rtt"] = Decimal(item.value)
 
-            elif "3" == rtt_info_type:
-                # rttMonLatestJitterOperRTTSum2 (3)
-                latest_jitter["rtt_sum2"] = str(item.value)
+                elif "2" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTSum (2)
+                    latest_jitters[rtt_entry]["rtt_sum"] = Decimal(item.value)
 
-            elif "4" == rtt_info_type:
-                # rttMonLatestJitterOperRTTMin (4)
-                latest_jitter["rtt_min"] = str(item.value)
+                elif "3" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTSum2 (3)
+                    latest_jitters[rtt_entry]["rtt_sum2"] = Decimal(item.value)
 
-            elif "5" == rtt_info_type:
-                # rttMonLatestJitterOperRTTMax (5)
-                latest_jitter["rtt_max"] = str(item.value)
+                elif "4" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTMin (4)
+                    latest_jitters[rtt_entry]["rtt_min"] = Decimal(item.value)
 
-            elif "6" == rtt_info_type:
-                # rttMonLatestJitterOperMinOfPositivesSD (6)
-                latest_jitter["min_of_positives_SD"] = str(item.value)
+                elif "5" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTMax (5)
+                    latest_jitters[rtt_entry]["rtt_max"] = Decimal(item.value)
 
-            elif "7" == rtt_info_type:
-                # rttMonLatestJitterOperMaxOfPositivesSD (7)
-                latest_jitter["max_of_positives_SD"] = str(item.value)
+                elif "6" == rtt_info_type:
+                    # rttMonLatestJitterOperMinOfPositivesSD (6)
+                    latest_jitters[rtt_entry]["min_of_positives_SD"] = Decimal(item.value)
 
-            elif "8" == rtt_info_type:
-                # rttMonLatestJitterOperNumOfPositivesSD (8)
-                latest_jitter["num_of_positives_SD"] = str(item.value)
+                elif "7" == rtt_info_type:
+                    # rttMonLatestJitterOperMaxOfPositivesSD (7)
+                    latest_jitters[rtt_entry]["max_of_positives_SD"] = Decimal(item.value)
 
-            elif "11" == rtt_info_type:
-                # rttMonLatestJitterOperMinOfNegativesSD (11)
-                latest_jitter["min_of_negatives_SD"] = str(item.value)
+                elif "8" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOfPositivesSD (8)
+                    latest_jitters[rtt_entry]["num_of_positives_SD"] = Decimal(item.value)
 
-            elif "12" == rtt_info_type:
-                # rttMonLatestJitterOperMaxOfNegativesSD (12)
-                latest_jitter["max_of_negatives_SD"] = str(item.value)
+                elif "11" == rtt_info_type:
+                    # rttMonLatestJitterOperMinOfNegativesSD (11)
+                    latest_jitters[rtt_entry]["min_of_negatives_SD"] = Decimal(item.value)
 
-            elif "13" == rtt_info_type:
-                # rttMonLatestJitterOperNumOfNegativesSD (13)
-                latest_jitter["num_of_negatives_SD"] = str(item.value)
+                elif "12" == rtt_info_type:
+                    # rttMonLatestJitterOperMaxOfNegativesSD (12)
+                    latest_jitters[rtt_entry]["max_of_negatives_SD"] = Decimal(item.value)
 
-            elif "16" == rtt_info_type:
-                # rttMonLatestJitterOperMinOfPositivesDS (16)
-                latest_jitter["min_of_positives_DS"] = str(item.value)
+                elif "13" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOfNegativesSD (13)
+                    latest_jitters[rtt_entry]["num_of_negatives_SD"] = Decimal(item.value)
 
-            elif "17" == rtt_info_type:
-                # rttMonLatestJitterOperMaxOfPositivesDS (17)
-                latest_jitter["max_of_positives_DS"] = str(item.value)
+                elif "16" == rtt_info_type:
+                    # rttMonLatestJitterOperMinOfPositivesDS (16)
+                    latest_jitters[rtt_entry]["min_of_positives_DS"] = Decimal(item.value)
 
-            elif "18" == rtt_info_type:
-                # rttMonLatestJitterOperNumOfPositivesDS (18)
-                latest_jitter["num_of_positives_DS"] = str(item.value)
+                elif "17" == rtt_info_type:
+                    # rttMonLatestJitterOperMaxOfPositivesDS (17)
+                    latest_jitters[rtt_entry]["max_of_positives_DS"] = Decimal(item.value)
 
-            elif "21" == rtt_info_type:
-                # rttMonLatestJitterOperMinOfNegativesDS (21)
-                latest_jitter["min_of_negatives_DS"] = str(item.value)
+                elif "18" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOfPositivesDS (18)
+                    latest_jitters[rtt_entry]["num_of_positives_DS"] = Decimal(item.value)
 
-            elif "22" == rtt_info_type:
-                # rttMonLatestJitterOperMaxOfNegativesDS (22)
-                latest_jitter["max_of_negatives_DS"] = str(item.value)
+                elif "21" == rtt_info_type:
+                    # rttMonLatestJitterOperMinOfNegativesDS (21)
+                    latest_jitters[rtt_entry]["min_of_negatives_DS"] = Decimal(item.value)
 
-            elif "23" == rtt_info_type:
-                # rttMonLatestJitterOperNumOfNegativesDS (23)
-                latest_jitter["num_of_negatives_DS"] = str(item.value)
+                elif "22" == rtt_info_type:
+                    # rttMonLatestJitterOperMaxOfNegativesDS (22)
+                    latest_jitters[rtt_entry]["max_of_negatives_DS"] = Decimal(item.value)
 
-            elif "26" == rtt_info_type:
-                # rttMonLatestJitterOperPacketLossSD (26)
-                latest_jitter["packet_loss_SD"] = str(item.value)
+                elif "23" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOfNegativesDS (23)
+                    latest_jitters[rtt_entry]["num_of_negatives_DS"] = Decimal(item.value)
 
-            elif "27" == rtt_info_type:
-                # rttMonLatestJitterOperPacketLossDS (27)
-                latest_jitter["packet_loss_DS"] = str(item.value)
+                elif "26" == rtt_info_type:
+                    # rttMonLatestJitterOperPacketLossSD (26)
+                    latest_jitters[rtt_entry]["packet_loss_SD"] = Decimal(item.value)
 
-            elif "28" == rtt_info_type:
-                # rttMonLatestJitterOperPacketOutOfSequence (28)
-                latest_jitter["packet_out_of_seq"] = str(item.value)
+                elif "27" == rtt_info_type:
+                    # rttMonLatestJitterOperPacketLossDS (27)
+                    latest_jitters[rtt_entry]["packet_loss_DS"] = Decimal(item.value)
 
-            elif "29" == rtt_info_type:
-                # rttMonLatestJitterOperPacketMIA (29)
-                latest_jitter["packet_mia"] = str(item.value)
+                elif "28" == rtt_info_type:
+                    # rttMonLatestJitterOperPacketOutOfSequence (28)
+                    latest_jitters[rtt_entry]["packet_out_of_seq"] = Decimal(item.value)
 
-            elif "30" == rtt_info_type:
-                # rttMonLatestJitterOperPacketLateArrival (30)
-                latest_jitter["packet_late_arrival"] = str(item.value)
+                elif "29" == rtt_info_type:
+                    # rttMonLatestJitterOperPacketMIA (29)
+                    latest_jitters[rtt_entry]["packet_mia"] = Decimal(item.value)
 
-            elif "31" == rtt_info_type:
-                # rttMonLatestJitterOperSense (31)
-                latest_jitter["sense"] = str(item.value)
+                elif "30" == rtt_info_type:
+                    # rttMonLatestJitterOperPacketLateArrival (30)
+                    latest_jitters[rtt_entry]["packet_late_arrival"] = Decimal(item.value)
 
-            elif "32" == rtt_info_type:
-                # rttMonLatestJitterErrorSenseDescription (32)
-                latest_jitter["sense_description"] = str(item.value)
+                elif "31" == rtt_info_type:
+                    # rttMonLatestJitterOperSense (31)
+                    latest_jitters[rtt_entry]["sense"] = str(item.value)
 
-            # One way latency skipped
+                elif "32" == rtt_info_type:
+                    # rttMonLatestJitterErrorSenseDescription (32)
+                    latest_jitters[rtt_entry]["sense_description"] = str(item.value)
 
-            elif "42" == rtt_info_type:
-                # rttMonLatestJitterOperMOS (42)
-                latest_jitter["MOS"] = str(item.value)
+                # One way latency skipped
 
-            elif "43" == rtt_info_type:
-                # rttMonLatestJitterOperICPIF (43)
-                latest_jitter["ICPIF"] = str(item.value)
+                elif "42" == rtt_info_type:
+                    # rttMonLatestJitterOperMOS (42)
+                    latest_jitters[rtt_entry]["MOS"] = Decimal(item.value)
 
-            elif "46" == rtt_info_type:
-                # rttMonLatestJitterOperAvgJitter (46)
-                latest_jitter["avg_jitter"] = str(item.value)
+                elif "43" == rtt_info_type:
+                    # rttMonLatestJitterOperICPIF (43)
+                    latest_jitters[rtt_entry]["ICPIF"] = Decimal(item.value)
 
-            elif "47" == rtt_info_type:
-                # rttMonLatestJitterOperAvgSDJ (47)
-                latest_jitter["avg_jitter_SD"] = str(item.value)
+                elif "46" == rtt_info_type:
+                    # rttMonLatestJitterOperAvgJitter (46)
+                    latest_jitters[rtt_entry]["avg_jitter"] = Decimal(item.value)
 
-            elif "48" == rtt_info_type:
-                # rttMonLatestJitterOperAvgDSJ (48)
-                latest_jitter["avg_jitter_DS"] = str(item.value)
+                elif "47" == rtt_info_type:
+                    # rttMonLatestJitterOperAvgSDJ (47)
+                    latest_jitters[rtt_entry]["avg_jitter_SD"] = Decimal(item.value)
 
-            elif "49" == rtt_info_type:
-                # rttMonLatestJitterOperOWAvgSD (49)
-                latest_jitter["avg_latency_SD"] = str(item.value)
+                elif "48" == rtt_info_type:
+                    # rttMonLatestJitterOperAvgDSJ (48)
+                    latest_jitters[rtt_entry]["avg_jitter_DS"] = Decimal(item.value)
 
-            elif "50" == rtt_info_type:
-                # rttMonLatestJitterOperOWAvgDS (50)
-                latest_jitter["avg_latency_DS"] = str(item.value)
+                elif "49" == rtt_info_type:
+                    # rttMonLatestJitterOperOWAvgSD (49)
+                    latest_jitters[rtt_entry]["avg_latency_SD"] = Decimal(item.value)
 
-            elif "51" == rtt_info_type:
-                # rttMonLatestJitterOperNTPState (51)
-                latest_jitter["ntp_sync"] = (str(item.value) == "1")
+                elif "50" == rtt_info_type:
+                    # rttMonLatestJitterOperOWAvgDS (50)
+                    latest_jitters[rtt_entry]["avg_latency_DS"] = Decimal(item.value)
 
-            elif "53" == rtt_info_type:
-                # rttMonLatestJitterOperRTTSumHigh (53)
-                latest_jitter["rtt_sum_high"] = str(item.value)
+                elif "51" == rtt_info_type:
+                    # rttMonLatestJitterOperNTPState (51)
+                    latest_jitters[rtt_entry]["ntp_sync"] = (int(item.value) == 1)
 
-            elif "54" == rtt_info_type:
-                # rttMonLatestJitterOperRTTSum2High (54)
-                latest_jitter["rtt_sum2_high"] = str(item.value)
+                elif "53" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTSumHigh (53)
+                    latest_jitters[rtt_entry]["rtt_sum_high"] = Decimal(item.value)
 
-            elif "59" == rtt_info_type:
-                # rttMonLatestJitterOperNumOverThresh (59)
-                latest_jitter["num_over_threshold"] = str(item.value)
+                elif "54" == rtt_info_type:
+                    # rttMonLatestJitterOperRTTSum2High (54)
+                    latest_jitters[rtt_entry]["rtt_sum2_high"] = Decimal(item.value)
+
+                elif "59" == rtt_info_type:
+                    # rttMonLatestJitterOperNumOverThresh (59)
+                    latest_jitters[rtt_entry]["num_over_threshold"] = Decimal(item.value)
+
+            except ValueError:
+                pass
+
+        # Add jitter info for each rtt entry
+        for rtt_entry in latest_jitters:
+            latest_jitter = latest_jitters[rtt_entry]
 
             # Merge high- and low bits for applicable fields
-            try:
-                if int(latest_jitter["rtt_sum_high"]) > 0:
-                    latest_jitter["rtt_sum"] = \
-                        str(int(latest_jitter["rtt_sum"]) + (int(latest_jitter["rtt_sum_high"]) << 32))
-                    del latest_jitter["rtt_sum_high"]
-            except ValueError:
-                pass
+            if "rtt_sum" in latest_jitter \
+                    and "rtt_sum_high" in latest_jitter \
+                    and latest_jitter["rtt_sum_high"] > 0:
+                latest_jitter["rtt_sum"] = Decimal(latest_jitter["rtt_sum"] +
+                                                   (latest_jitter["rtt_sum_high"] << 32))
+                del latest_jitter["rtt_sum_high"]
 
-            try:
-                if int(latest_jitter["rtt_sum2_high"]) > 0:
-                    latest_jitter["rtt_sum2"] = \
-                        str(int(latest_jitter["rtt_sum2"]) + (int(latest_jitter["rtt_sum2_high"]) << 32))
-                    del latest_jitter["rtt_sum2_high"]
-            except ValueError:
-                pass
+            if "rtt_sum2" in latest_jitter \
+                    and "rtt_sum2_high" in latest_jitter \
+                    and latest_jitter["rtt_sum2_high"] > 0:
+                latest_jitter["rtt_sum2"] = Decimal(latest_jitter["rtt_sum2"] +
+                                                    (latest_jitter["rtt_sum2_high"] << 32))
+                del latest_jitter["rtt_sum2_high"]
 
             # Add the latest jitter into to the dict
             self.rtt_dict[rtt_entry]["latest_jitter"] = latest_jitter
@@ -553,6 +573,13 @@ class CiscoIpSlaChecker:
             for sla in sla_list:
                 self.message += str(sla) + "\n"
 
+    def get_sla_description(self, rtt_id):
+        sla_description = str(rtt_id)
+        if self.rtt_dict[rtt_id]["tag"]:
+            sla_description += " (tag: {0})".format(self.rtt_dict[rtt_id]["tag"])
+
+        return sla_description
+
     @staticmethod
     def get_rtt_type_description(rtt_type):
         rtt_type = int(rtt_type)
@@ -577,8 +604,10 @@ class CiscoIpSlaChecker:
         ]
         return rtt_type in supported_rtt_types
 
-    def check_requested_rtt_entries_types(self, requested_entries):
+    def validate_requested_rtt_entries_types(self, requested_entries):
+        # Create a list of all RTT types used and their count
         rtt_type_count = Counter()
+
         for requested_entry in requested_entries:
             if requested_entry not in self.rtt_dict:
                 self.message = "SLA {0} does not exist".format(requested_entry)
@@ -598,10 +627,74 @@ class CiscoIpSlaChecker:
 
             rtt_type_count[rtt_type] += 1
 
+        # For now, only checking of multiple SLA's is supported if they are all of the same type
         if len(rtt_type_count) > 1:
             self.message = "Checking multiple SLA entries is supported, but only if they are of the same type."
             self.add_status(self.STATUS_UNKNOWN)
             return False
+
+    def check_jitter_health(self, requested_entry):
+        rtt_id = self.get_sla_description(requested_entry)
+
+        latest_jitter = self.rtt_dict[requested_entry]["latest_jitter"]
+        if latest_jitter["sense"] != "1":  # ok (1)
+            self.add_status(self.STATUS_WARNING)
+            self.add_message("Latest jitter operation not ok for SLA {0}: {1}".format(
+                rtt_id, latest_jitter["sense_description"]))
+
+        if not latest_jitter["ntp_sync"]:
+            self.add_status(self.STATUS_WARNING)
+            self.add_message("NTP not synced between source and destination for SLA {0}".format(rtt_id))
+
+        # Check MOS thresholds (if set)
+        if (self.options.critical_mos is not None or self.options.warning_mos is not None) \
+                and latest_jitter["MOS"] is None:
+            self.add_status(self.STATUS_UNKNOWN)
+            self.add_message("MOS not known for SLA {0}, but threshold is set".format(rtt_id))
+        elif self.options.critical_mos is not None and latest_jitter["MOS"] <= self.options.critical:
+            self.add_status(self.STATUS_CRITICAL)
+            self.add_message("MOS is under critical threshold for SLA {0}".format(rtt_id))
+        elif self.options.warning_mos is not None and latest_jitter["MOS"] <= self.options.warning:
+            self.add_status(self.STATUS_WARNING)
+            self.add_message("MOS is under warning threshold for SLA {0}".format(rtt_id))
+
+        # Check ICPIF thresholds (if set)
+        if (self.options.critical_icpif is not None or self.options.warning_icpif is not None) \
+                and latest_jitter["ICPIF"] is None:
+            self.add_status(self.STATUS_UNKNOWN)
+            self.add_message("ICPIF not known for SLA {0}, but threshold is set".format(rtt_id))
+        elif self.options.critical_icpif is not None and latest_jitter["ICPIF"] >= self.options.critical:
+            self.add_status(self.STATUS_CRITICAL)
+            self.add_message("ICPIF is over critical threshold for SLA {0}".format(rtt_id))
+        elif self.options.warning_icpif is not None and latest_jitter["ICPIF"] >= self.options.warning:
+            self.add_status(self.STATUS_WARNING)
+            self.add_message("ICPIF is over warning threshold for SLA {0}".format(rtt_id))
+
+    def collect_perfdata_jitter(self, requested_entry):
+        jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
+        if jitter_info["num_of_rtt"] > 0:
+            self.add_perfdata("RTT={min};{avg};{max}".format(
+                min=jitter_info["rtt_min"],
+                avg=jitter_info["rtt_sum"] / jitter_info["num_of_rtt"],
+                max=jitter_info["rtt_max"]
+            ))
+            self.add_perfdata("'RTT variance'={var}".format(
+                var=jitter_info["rtt_sum2"] / jitter_info["num_of_rtt"],
+            ))
+
+        self.add_perfdata("'Avg jitter'={0}".format(jitter_info["avg_jitter"]))
+        self.add_perfdata("'Avg jitter SD'={0}".format(jitter_info["avg_jitter_SD"]))
+        self.add_perfdata("'Avg jitter DS'={0}".format(jitter_info["avg_jitter_DS"]))
+        self.add_perfdata("'Avg latency SD'={0}".format(jitter_info["avg_latency_SD"]))
+        self.add_perfdata("'Avg latency DS'={0}".format(jitter_info["avg_latency_DS"]))
+        self.add_perfdata("'MOS'={0}".format(jitter_info["MOS"]))
+        self.add_perfdata("'ICPIF'={0}".format(jitter_info["ICPIF"]))
+        self.add_perfdata("'Packet loss SD'={0}".format(jitter_info["packet_loss_SD"]))
+        self.add_perfdata("'Packet loss DS'={0}".format(jitter_info["packet_loss_DS"]))
+        self.add_perfdata("'Packet out of seq'={0}".format(jitter_info["packet_out_of_seq"]))
+        self.add_perfdata("'Packet MIA'={0}".format(jitter_info["packet_mia"]))
+        self.add_perfdata("'Packet late arrival'={0}".format(jitter_info["packet_late_arrival"]))
+        self.add_perfdata("'Num over threshold'={0}".format(jitter_info["num_over_threshold"]))
 
     def check(self):
         messages = []
@@ -616,48 +709,34 @@ class CiscoIpSlaChecker:
         ok_count = 0
         failed_count = 0
 
-        if not self.check_requested_rtt_entries_types(requested_entries):
+        if not self.validate_requested_rtt_entries_types(requested_entries):
             return
 
         for requested_entry in requested_entries:
-            rtt_id = str(requested_entry)
             rtt_type = self.rtt_dict[requested_entry]["type"]
-
-            if self.rtt_dict[requested_entry]["tag"]:
-                rtt_id += " (tag: {0})".format(self.rtt_dict[requested_entry]["tag"])
+            sla_description = self.get_sla_description(requested_entry)
 
             if self.rtt_dict[requested_entry]["in_active_state"]:
                 if self.rtt_dict[requested_entry]["conn_lost_occurred"]:
                     failed_count += 1
-                    messages.append("Connection lost for SLA {0}".format(rtt_id))
+                    messages.append("Connection lost for SLA {0}".format(sla_description))
                 elif self.rtt_dict[requested_entry]["timeout_occurred"]:
                     failed_count += 1
-                    messages.append("Timeout for SLA {0}".format(rtt_id))
+                    messages.append("Timeout for SLA {0}".format(sla_description))
                 elif self.rtt_dict[requested_entry]["over_thres_occurred"]:
                     failed_count += 1
-                    messages.append("Threshold exceeded for SLA {0}".format(rtt_id))
+                    messages.append("Threshold exceeded for SLA {0}".format(sla_description))
                 else:
                     ok_count += 1
             else:
-                messages.append("SLA {0} not active".format(rtt_id))
+                messages.append("SLA {0} not active".format(sla_description))
                 self.add_status(self.STATUS_WARNING)
 
+            # Jitter specific threshold checks
             if rtt_type == self.get_rtt_type_id("jitter"):
-                try:
-                    latest_mos = int(self.rtt_dict[requested_entry]["latest_jitter"]["MOS"])
-                except ValueError:
-                    latest_mos = None
-
-                # Check thresholds (if set)
-                if latest_mos is None:
-                    self.add_status(self.STATUS_UNKNOWN)
-                    self.message = "MOS not known for SLA {0}, but threshold is set".format(rtt_id)
-                elif self.options.critical is not None and latest_mos >= self.options.critical:
-                    self.add_status(self.STATUS_CRITICAL)
-                    self.message = "MOS is over critical threshold for SLA {0}".format(rtt_id)
-                elif self.options.warning is not None and latest_mos >= self.options.warning:
-                    self.add_status(self.STATUS_WARNING)
-                    self.message = "MOS is over warning threshold for SLA {0}".format(rtt_id)
+                self.check_jitter_health(requested_entry)
+                if self.options.perf:
+                    self.collect_perfdata_jitter(requested_entry)
 
         if failed_count + ok_count == 0:
             messages.append("No SLAs checked")
@@ -691,15 +770,17 @@ class CiscoIpSlaChecker:
             self.message = ", ".join(messages)
 
         if self.options.perf:
-            self.perfdata = "'Failed%'={0}%".format(failed_pct)
+            self.add_perfdata("'Failed%'={0}%".format(failed_pct))
             if self.options.critical_pct and self.options.warning_pct:
-                self.perfdata += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
+                self.add_perfdata(";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct))
 
             for requested_entry in requested_entries:
                 if requested_entry in self.rtt_dict:
-                    self.perfdata += " 'rt {0}'={1}ms".format(
-                        requested_entry,
-                        self.rtt_dict[requested_entry]["latest_completion_time"]
+                    self.add_perfdata(
+                        " 'rt {0}'={1}ms".format(
+                            requested_entry,
+                            self.rtt_dict[requested_entry]["latest_completion_time"]
+                        )
                     )
 
 
