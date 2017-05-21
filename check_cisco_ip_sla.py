@@ -60,8 +60,8 @@ class CiscoIpSlaChecker:
 
     def __init__(self):
         self.status = None
-        self.message = None
-        self.perfdata = None
+        self.messages = []
+        self.perfdata = []
         self.session = None
         self.options = None
         self.rtt_dict = dict()
@@ -73,7 +73,7 @@ class CiscoIpSlaChecker:
             self.read_rtt_entries()
         except EasySNMPError as e:
             self.add_status(self.STATUS_UNKNOWN)
-            self.message = "SNMP error checking {}, {}".format(self.options.hostname, e)
+            self.set_message("SNMP error checking {}, {}".format(self.options.hostname, e))
         else:
             if "list" == self.options.mode:
                 self.list_rtt()
@@ -138,6 +138,10 @@ class CiscoIpSlaChecker:
                             default=None, type=int, help="Critical threshold for the MOS value of jitter SLAs")
         parser.add_argument("--warning-mos",
                             default=None, type=int, help="Warning threshold for the MOS value of jitter SLAs")
+        parser.add_argument("--critical-icpif",
+                            default=None, type=int, help="Critical threshold for the ICPIF value of jitter SLAs")
+        parser.add_argument("--warning-icpif",
+                            default=None, type=int, help="Warning threshold for the ICPIF value of jitter SLAs")
         parser.add_argument("--verbose",
                             default=0, type=int, choices=[0, 1, 2], help="Verbose output")
         self.options = parser.parse_args()
@@ -215,15 +219,16 @@ class CiscoIpSlaChecker:
         elif self.status == self.STATUS_UNKNOWN:
             output = "Unknown"
 
-        if self.message:
+        if self.messages:
             if len(output):
                 output += " - "
-            output += self.message
+            # Join messages like sentences. Correct those messages which already ended with a period or a newline.
+            output += ". ".join(self.messages).replace(".. ", ".").replace("\n. ", "\n")
 
         if self.perfdata:
             if len(output):
                 output += " | "
-            output += self.perfdata
+            output += " ".join(self.perfdata)
 
         print(output)
 
@@ -250,11 +255,14 @@ class CiscoIpSlaChecker:
         if self.status is None or status > self.status:
             self.status = status
 
-    def add_message(self, message):
-        self.message += message
+    def set_message(self, message):
+        self.messages = [message]
 
-    def add_perfdata(self, perfdata):
-        self.perdata += perfdata
+    def add_message(self, message):
+        self.messages.append(message)
+
+    def add_perfdata(self, perfitem):
+        self.perfdata.append(perfitem)
 
     def read_rtt_entries(self):
         """ Reads all RTT entries and stores found data in self.rtt_dict """
@@ -277,10 +285,13 @@ class CiscoIpSlaChecker:
                 self.rtt_dict[rtt_entry]["tag"] = str(item.value)
             elif "4" == rtt_info_type:
                 # rttMonCtrlAdminRttType (4)
-                self.rtt_dict[rtt_entry]["type"] = str(item.value)
+                self.rtt_dict[rtt_entry]["type"] = int(item.value)
             elif "5" == rtt_info_type:
                 # rttMonCtrlAdminThreshold (5)
-                self.rtt_dict[rtt_entry]["threshold"] = str(item.value)
+                self.rtt_dict[rtt_entry]["threshold"] = int(item.value)
+            elif "12" == rtt_info_type:
+                # rttMonCtrlAdminLongTag (12)
+                self.rtt_dict[rtt_entry]["long_tag"] = str(item.value)
 
         # Get SLA entry status
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
@@ -331,12 +342,12 @@ class CiscoIpSlaChecker:
 
             if "1" == rtt_info_type:
                 # rttMonLatestRttOperCompletionTime (1)
-                self.rtt_dict[rtt_entry]["latest_completion_time"] = str(item.value)
+                self.rtt_dict[rtt_entry]["latest_completion_time"] = int(item.value)
 
             elif "2" == rtt_info_type:
                 # rttMonLatestRttOperSense (2)
                 # See http://www.circitor.fr/Mibs/Html/CISCO-RTTMON-TC-MIB.php#RttResponseSense
-                self.rtt_dict[rtt_entry]["latest_sense"] = str(item.value)
+                self.rtt_dict[rtt_entry]["latest_sense"] = int(item.value)
 
         # Get Jitter specific data (See "-- LatestJitterOper Table" in MIB)
         latest_jitters = dict()
@@ -566,12 +577,12 @@ class CiscoIpSlaChecker:
         col_headers += "  " + ("-" * col_width_tag) + "\n"
 
         if len(sla_list) == 0:
-            self.message = "No SLAs available"
+            self.add_message("No SLAs available")
         else:
-            self.message = "SLAs available:\n"
-            self.message += col_headers
+            self.set_message("SLAs available:\n")
+            self.add_message(col_headers)
             for sla in sla_list:
-                self.message += str(sla) + "\n"
+                self.add_message(str(sla) + "\n")
 
     def get_sla_description(self, rtt_id):
         sla_description = str(rtt_id)
@@ -610,7 +621,7 @@ class CiscoIpSlaChecker:
 
         for requested_entry in requested_entries:
             if requested_entry not in self.rtt_dict:
-                self.message = "SLA {0} does not exist".format(requested_entry)
+                self.add_message("SLA {0} does not exist".format(requested_entry))
                 self.add_status(self.STATUS_UNKNOWN)
                 return False
 
@@ -619,9 +630,9 @@ class CiscoIpSlaChecker:
 
             if not CiscoIpSlaChecker.is_rtt_type_supported(rtt_type):
                 msg = "SLA {0} is of type {1} ({2}) which is not supported."
-                self.message = msg.format(requested_entry,
-                                          rtt_type_description,
-                                          rtt_type)
+                self.add_message(msg.format(requested_entry,
+                                           rtt_type_description,
+                                           rtt_type))
                 self.add_status(self.STATUS_UNKNOWN)
                 return False
 
@@ -629,9 +640,11 @@ class CiscoIpSlaChecker:
 
         # For now, only checking of multiple SLA's is supported if they are all of the same type
         if len(rtt_type_count) > 1:
-            self.message = "Checking multiple SLA entries is supported, but only if they are of the same type."
+            self.add_message("Checking multiple SLA entries is supported, but only if they are of the same type.")
             self.add_status(self.STATUS_UNKNOWN)
             return False
+
+        return True
 
     def check_jitter_health(self, requested_entry):
         rtt_id = self.get_sla_description(requested_entry)
@@ -767,17 +780,18 @@ class CiscoIpSlaChecker:
             messages.insert(0, "{0} OK".format(ok_count))
 
         if messages:
-            self.message = ", ".join(messages)
+            self.add_message(", ".join(messages))
 
         if self.options.perf:
-            self.add_perfdata("'Failed%'={0}%".format(failed_pct))
+            failed_perf = "'Failed%'={0}%".format(failed_pct)
             if self.options.critical_pct and self.options.warning_pct:
-                self.add_perfdata(";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct))
+                failed_perf += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
+            self.add_perfdata(failed_perf)
 
             for requested_entry in requested_entries:
                 if requested_entry in self.rtt_dict:
                     self.add_perfdata(
-                        " 'rt {0}'={1}ms".format(
+                        "'rtt {0}'={1}ms".format(
                             requested_entry,
                             self.rtt_dict[requested_entry]["latest_completion_time"]
                         )
