@@ -64,6 +64,7 @@ class CiscoIpSlaChecker:
         self.perfdata = []
         self.session = None
         self.options = None
+        self.requested_entry_count = 0
         self.rtt_dict = dict()
 
     def run(self):
@@ -263,6 +264,14 @@ class CiscoIpSlaChecker:
 
     def add_perfdata(self, perfitem):
         self.perfdata.append(perfitem)
+
+    def get_entry_output_id(self, entry):
+        if self.requested_entry_count > 1:
+            entry_output_id = " " + entry
+        else:
+            entry_output_id = ""
+
+        return entry_output_id
 
     def read_rtt_entries(self):
         """ Reads all RTT entries and stores found data in self.rtt_dict """
@@ -686,28 +695,69 @@ class CiscoIpSlaChecker:
     def collect_perfdata_jitter(self, requested_entry):
         jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
         if jitter_info["num_of_rtt"] > 0:
-            self.add_perfdata("RTT={min};{avg};{max}".format(
+            self.add_perfdata("RTT{entry}={min};{avg};{max}".format(
+                entry=self.get_entry_output_id(requested_entry),
                 min=jitter_info["rtt_min"],
-                avg=jitter_info["rtt_sum"] / jitter_info["num_of_rtt"],
+                avg=round(jitter_info["rtt_sum"] / jitter_info["num_of_rtt"], 1),
                 max=jitter_info["rtt_max"]
             ))
-            self.add_perfdata("'RTT variance'={var}".format(
-                var=jitter_info["rtt_sum2"] / jitter_info["num_of_rtt"],
+            self.add_perfdata("'RTT variance{entry}'={var}".format(
+                entry=self.get_entry_output_id(requested_entry),
+                var=round(jitter_info["rtt_sum2"] / jitter_info["num_of_rtt"], 1),
             ))
 
-        self.add_perfdata("'Avg jitter'={0}".format(jitter_info["avg_jitter"]))
-        self.add_perfdata("'Avg jitter SD'={0}".format(jitter_info["avg_jitter_SD"]))
-        self.add_perfdata("'Avg jitter DS'={0}".format(jitter_info["avg_jitter_DS"]))
-        self.add_perfdata("'Avg latency SD'={0}".format(jitter_info["avg_latency_SD"]))
-        self.add_perfdata("'Avg latency DS'={0}".format(jitter_info["avg_latency_DS"]))
-        self.add_perfdata("'MOS'={0}".format(jitter_info["MOS"]))
-        self.add_perfdata("'ICPIF'={0}".format(jitter_info["ICPIF"]))
-        self.add_perfdata("'Packet loss SD'={0}".format(jitter_info["packet_loss_SD"]))
-        self.add_perfdata("'Packet loss DS'={0}".format(jitter_info["packet_loss_DS"]))
-        self.add_perfdata("'Packet out of seq'={0}".format(jitter_info["packet_out_of_seq"]))
-        self.add_perfdata("'Packet MIA'={0}".format(jitter_info["packet_mia"]))
-        self.add_perfdata("'Packet late arrival'={0}".format(jitter_info["packet_late_arrival"]))
-        self.add_perfdata("'Num over threshold'={0}".format(jitter_info["num_over_threshold"]))
+        self.add_perfdata("'Avg jitter{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["avg_jitter"]
+        ))
+        self.add_perfdata("'Avg jitter SD{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["avg_jitter_SD"]
+        ))
+        self.add_perfdata("'Avg jitter DS{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["avg_jitter_DS"]
+        ))
+        self.add_perfdata("'Avg latency SD{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["avg_latency_SD"]
+        ))
+        self.add_perfdata("'Avg latency DS{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["avg_latency_DS"]
+        ))
+        self.add_perfdata("'MOS{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["MOS"]
+        ))
+        self.add_perfdata("'ICPIF{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["ICPIF"]
+        ))
+        self.add_perfdata("'Packet loss SD{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["packet_loss_SD"]
+        ))
+        self.add_perfdata("'Packet loss DS{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["packet_loss_DS"]
+        ))
+        self.add_perfdata("'Packet out of seq{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["packet_out_of_seq"]
+        ))
+        self.add_perfdata("'Packet MIA{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["packet_mia"]
+        ))
+        self.add_perfdata("'Packet late arrival{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["packet_late_arrival"]
+        ))
+        self.add_perfdata("'Num over threshold{entry}'={v}".format(
+            entry=self.get_entry_output_id(requested_entry),
+            v=jitter_info["num_over_threshold"]
+        ))
 
     def check(self):
         messages = []
@@ -716,6 +766,7 @@ class CiscoIpSlaChecker:
         else:
             requested_entries = self.options.entries.replace(" ", "").split(",")
         requested_entries.sort(key=int)
+        self.requested_entry_count = len(requested_entries)
 
         # Initialize status to OK (if status is not set yet)
         self.add_status(self.STATUS_OK)
@@ -743,7 +794,7 @@ class CiscoIpSlaChecker:
                     ok_count += 1
             else:
                 messages.append("SLA {0} not active".format(sla_description))
-                self.add_status(self.STATUS_WARNING)
+                self.add_status(self.STATUS_UNKNOWN)
 
             # Jitter specific threshold checks
             if rtt_type == self.get_rtt_type_id("jitter"):
@@ -752,7 +803,7 @@ class CiscoIpSlaChecker:
                     self.collect_perfdata_jitter(requested_entry)
 
         if failed_count + ok_count == 0:
-            messages.append("No SLAs checked")
+            self.add_message("No SLAs checked")
             self.add_status(self.STATUS_UNKNOWN)
             return
 
@@ -783,20 +834,20 @@ class CiscoIpSlaChecker:
             self.add_message(", ".join(messages))
 
         if self.options.perf:
-            failed_perf = "'Failed%'={0}%".format(failed_pct)
-            if self.options.critical_pct and self.options.warning_pct:
-                failed_perf += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
-            self.add_perfdata(failed_perf)
+            if failed_count + ok_count > 1:
+                failed_perf = "'Failed%'={0}%".format(failed_pct)
+                if self.options.critical_pct and self.options.warning_pct:
+                    failed_perf += ";{0};{1};0;100".format(self.options.warning_pct, self.options.critical_pct)
+                self.add_perfdata(failed_perf)
 
             for requested_entry in requested_entries:
                 if requested_entry in self.rtt_dict:
                     self.add_perfdata(
-                        "'rtt {0}'={1}ms".format(
-                            requested_entry,
-                            self.rtt_dict[requested_entry]["latest_completion_time"]
+                        "'rtt{entry}'={v}ms".format(
+                            entry=self.get_entry_output_id(requested_entry),
+                            v=self.rtt_dict[requested_entry]["latest_completion_time"]
                         )
                     )
-
 
 if __name__ == "__main__":
     checker = CiscoIpSlaChecker()
