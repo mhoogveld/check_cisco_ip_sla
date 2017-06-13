@@ -763,10 +763,11 @@ class CiscoIpSlaChecker:
             entry=self.get_entry_output_id(requested_entry),
             v=jitter_info["packet_late_arrival"]
         ))
-        self.add_perfdata("'Num over threshold{entry}'={v}".format(
-            entry=self.get_entry_output_id(requested_entry),
-            v=jitter_info["num_over_threshold"]
-        ))
+        if "num_over_threshold" in jitter_info:
+            self.add_perfdata("'Num over threshold{entry}'={v}".format(
+                entry=self.get_entry_output_id(requested_entry),
+                v=jitter_info["num_over_threshold"]
+            ))
 
     def check(self):
         messages = []
