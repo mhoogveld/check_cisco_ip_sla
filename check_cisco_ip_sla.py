@@ -136,9 +136,9 @@ class CiscoIpSlaChecker:
         parser.add_argument("--warning",
                             default=None, type=int, help="Warning threshold in amount of failed SLAs")
         parser.add_argument("--critical-mos",
-                            default=None, type=int, help="Critical threshold for the MOS value of jitter SLAs")
+                            default=None, type=Decimal, help="Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
         parser.add_argument("--warning-mos",
-                            default=None, type=int, help="Warning threshold for the MOS value of jitter SLAs")
+                            default=None, type=Decimal, help="Warning threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
         parser.add_argument("--critical-icpif",
                             default=None, type=int, help="Critical threshold for the ICPIF value of jitter SLAs")
         parser.add_argument("--warning-icpif",
@@ -194,6 +194,12 @@ class CiscoIpSlaChecker:
             return False
         if self.options.mode == "check" and not self.options.entries:
             print("You must specify SLA-entries for check-mode (use list-mode to list existing entries)")
+            return False
+        if self.options.critical_mos and (self.options.critical_mos < 1 or self.options.critical_mos > 5):
+            print("The critical-mos threshold value must lie between 1.00 and 5.00.")
+            return False
+        if self.options.warning_mos and (self.options.warning_mos < 1 or self.options.warning_mos > 5):
+            print("The warning-mos threshold value must lie between 1.00 and 5.00.")
             return False
         return True
 
@@ -470,7 +476,10 @@ class CiscoIpSlaChecker:
 
                 elif "42" == rtt_info_type:
                     # rttMonLatestJitterOperMOS (42)
-                    latest_jitters[rtt_entry]["MOS"] = Decimal(item.value)
+                    MOS = Decimal(item.value)
+                    if MOS >= 100:
+                        MOS = MOS / 100
+                    latest_jitters[rtt_entry]["MOS"] = MOS
 
                 elif "43" == rtt_info_type:
                     # rttMonLatestJitterOperICPIF (43)
@@ -669,28 +678,28 @@ class CiscoIpSlaChecker:
             self.add_message("NTP not synced between source and destination for SLA {0}".format(rtt_id))
 
         # Check MOS thresholds (if set)
-        if (self.options.critical_mos is not None or self.options.warning_mos is not None) \
-                and latest_jitter["MOS"] is None:
-            self.add_status(self.STATUS_UNKNOWN)
-            self.add_message("MOS not known for SLA {0}, but threshold is set".format(rtt_id))
-        elif self.options.critical_mos is not None and latest_jitter["MOS"] <= self.options.critical:
-            self.add_status(self.STATUS_CRITICAL)
-            self.add_message("MOS is under critical threshold for SLA {0}".format(rtt_id))
-        elif self.options.warning_mos is not None and latest_jitter["MOS"] <= self.options.warning:
-            self.add_status(self.STATUS_WARNING)
-            self.add_message("MOS is under warning threshold for SLA {0}".format(rtt_id))
+        if self.options.critical_mos is not None or self.options.warning_mos is not None:
+            if latest_jitter["MOS"] is None:
+                self.add_status(self.STATUS_UNKNOWN)
+                self.add_message("MOS not known for SLA {0}, but threshold is set".format(rtt_id))
+            elif self.options.critical_mos is not None and latest_jitter["MOS"] <= self.options.critical_mos:
+                self.add_status(self.STATUS_CRITICAL)
+                self.add_message("MOS is under critical threshold for SLA {0}".format(rtt_id))
+            elif self.options.warning_mos is not None and latest_jitter["MOS"] <= self.options.warning_mos:
+                self.add_status(self.STATUS_WARNING)
+                self.add_message("MOS is under warning threshold for SLA {0}".format(rtt_id))
 
         # Check ICPIF thresholds (if set)
-        if (self.options.critical_icpif is not None or self.options.warning_icpif is not None) \
-                and latest_jitter["ICPIF"] is None:
-            self.add_status(self.STATUS_UNKNOWN)
-            self.add_message("ICPIF not known for SLA {0}, but threshold is set".format(rtt_id))
-        elif self.options.critical_icpif is not None and latest_jitter["ICPIF"] >= self.options.critical:
-            self.add_status(self.STATUS_CRITICAL)
-            self.add_message("ICPIF is over critical threshold for SLA {0}".format(rtt_id))
-        elif self.options.warning_icpif is not None and latest_jitter["ICPIF"] >= self.options.warning:
-            self.add_status(self.STATUS_WARNING)
-            self.add_message("ICPIF is over warning threshold for SLA {0}".format(rtt_id))
+        if self.options.critical_icpif is not None or self.options.warning_icpif is not None:
+            if latest_jitter["ICPIF"] is None:
+                self.add_status(self.STATUS_UNKNOWN)
+                self.add_message("ICPIF not known for SLA {0}, but threshold is set".format(rtt_id))
+            elif self.options.critical_icpif is not None and latest_jitter["ICPIF"] >= self.options.critical_icpif:
+                self.add_status(self.STATUS_CRITICAL)
+                self.add_message("ICPIF is over critical threshold for SLA {0}".format(rtt_id))
+            elif self.options.warning_icpif is not None and latest_jitter["ICPIF"] >= self.options.warning_icpif:
+                self.add_status(self.STATUS_WARNING)
+                self.add_message("ICPIF is over warning threshold for SLA {0}".format(rtt_id))
 
     def collect_perfdata_jitter(self, requested_entry):
         jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
