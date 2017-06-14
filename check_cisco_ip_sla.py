@@ -11,14 +11,15 @@ For more info on IP SLA's, see the manual for your Cisco device on IP SLA's.
 """
 
 import argparse
+import math
+from decimal import *
+from collections import Counter
 from easysnmp import Session
 from easysnmp.exceptions import *
-from collections import Counter
-from decimal import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.0.2"
-__email__ = "m.hoogveld@elevate.nl"
+__version__ = "1.1.0"
+__email__ = "maarten@hoogveld.org"
 __licence__ = "GPL-3.0"
 __status__ = "Production"
 
@@ -121,8 +122,10 @@ class CiscoIpSlaChecker:
                             choices=["list", "check"], help="Operation mode")
         parser.add_argument("-e", "--entries",
                             default="all",
-                            help="SLA entry (or entries) to check, specify as 'all', "
-                                 "a single value or comma-separated list (default 'all')")
+                            help="SLA entry (or entries) to check, specify a single value, "
+                                 "a comma-separated list or 'all' to check all entries available. "
+                                 "All entries must be of the same type. "
+                                 "(default 'all')")
         parser.add_argument("--perf",
                             action="store_true", help="Return performance data (failed percentage, round-trip times)")
         parser.add_argument("--critical-pct",
@@ -136,9 +139,11 @@ class CiscoIpSlaChecker:
         parser.add_argument("--warning",
                             default=None, type=int, help="Warning threshold in amount of failed SLAs")
         parser.add_argument("--critical-mos",
-                            default=None, type=Decimal, help="Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
+                            default=None, type=Decimal,
+                            help="Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
         parser.add_argument("--warning-mos",
-                            default=None, type=Decimal, help="Warning threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
+                            default=None, type=Decimal,
+                            help="Warning threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
         parser.add_argument("--critical-icpif",
                             default=None, type=int, help="Critical threshold for the ICPIF value of jitter SLAs")
         parser.add_argument("--warning-icpif",
@@ -647,7 +652,7 @@ class CiscoIpSlaChecker:
             rtt_type_description = CiscoIpSlaChecker.get_rtt_type_description(rtt_type)
 
             if not CiscoIpSlaChecker.is_rtt_type_supported(rtt_type):
-                msg = "SLA {0} is of type {1} ({2}) which is not supported."
+                msg = "SLA {0} is of type {1} ({2}) which is not supported (yet)."
                 self.add_message(msg.format(requested_entry,
                                            rtt_type_description,
                                            rtt_type))
@@ -703,16 +708,20 @@ class CiscoIpSlaChecker:
 
     def collect_perfdata_jitter(self, requested_entry):
         jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
-        if jitter_info["num_of_rtt"] > 0:
-            self.add_perfdata("RTT{entry}={min};{avg};{max}".format(
+        if jitter_info["num_of_rtt"] > 1:
+            self.add_perfdata("'RTT avg{entry}'={avg};{min};{max}".format(
                 entry=self.get_entry_output_id(requested_entry),
+                avg=round(jitter_info["rtt_sum"] / (jitter_info["num_of_rtt"] - 1), 1),
                 min=jitter_info["rtt_min"],
-                avg=round(jitter_info["rtt_sum"] / jitter_info["num_of_rtt"], 1),
                 max=jitter_info["rtt_max"]
             ))
             self.add_perfdata("'RTT variance{entry}'={var}".format(
                 entry=self.get_entry_output_id(requested_entry),
-                var=round(jitter_info["rtt_sum2"] / jitter_info["num_of_rtt"], 1),
+                var=round(jitter_info["rtt_sum2"] / (jitter_info["num_of_rtt"] - 1), 1),
+            ))
+            self.add_perfdata("'RTT std dev{entry}'={var}".format(
+                entry=self.get_entry_output_id(requested_entry),
+                var=round(math.sqrt(jitter_info["rtt_sum2"] / (jitter_info["num_of_rtt"] - 1)), 1),
             ))
 
         self.add_perfdata("'Avg jitter{entry}'={v}".format(

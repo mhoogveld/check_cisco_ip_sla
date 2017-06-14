@@ -23,6 +23,9 @@ the RTT-MIB was installed on the system.
   * Added warning when checking unsupported IP SLA types.
   * IMPORTANT backward incompatible change: Repurposed the '--version' parameter from setting the snmp-version to displaying the scripts version. 
     To specify the snmp version, use '-v' or '--snmp-version'
+* v1.1.0 (2017-TBD)
+  * Added support for rtt-type jitter with MOS and ICPIF thresholds and extensive perf data
+  * Removed sla tag suffix in perf data when checking only one entry
 
 ## Installation
 Requirements:
@@ -32,11 +35,20 @@ Requirements:
 
 Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it
 
+## Output
+
+... describe output ... 
+
+Performance data:
+
+... describe performance data values ...
+
+s
 ## Usage
 For a complete overview run the check with the parameter "--help".
 
 ```
-$ ./check_cisco_ip_sla.py --help
+$ ./check_cisco_ip_sla.py  --help
 usage: check_cisco_ip_sla.py [-h] [--version] [-H HOSTNAME] [-v {1,2,3}]
                              [-c COMMUNITY] [-u SECURITY_NAME]
                              [-l {noAuthNoPriv,authNoPriv,authPriv}]
@@ -45,7 +57,11 @@ usage: check_cisco_ip_sla.py [-h] [--version] [-H HOSTNAME] [-v {1,2,3}]
                              [-m {list,check}] [-e ENTRIES] [--perf]
                              [--critical-pct CRITICAL_PCT]
                              [--warning-pct WARNING_PCT] [--critical CRITICAL]
-                             [--warning WARNING] [--verbose {0,1,2}]
+                             [--warning WARNING] [--critical-mos CRITICAL_MOS]
+                             [--warning-mos WARNING_MOS]
+                             [--critical-icpif CRITICAL_ICPIF]
+                             [--warning-icpif WARNING_ICPIF]
+                             [--verbose {0,1,2}]
 
 Monitoring check plugin to check Cisco SLA status for one or more entries. If
 a checked SLA entry is not in active state, the status is raised to WARNING.
@@ -80,8 +96,10 @@ optional arguments:
   -m {list,check}, --mode {list,check}
                         Operation mode
   -e ENTRIES, --entries ENTRIES
-                        SLA entry (or entries) to check, specify as 'all', a
-                        single value or comma-separated list (default 'all')
+                        SLA entry (or entries) to check, specify a single
+                        value, a comma-separated list or 'all' to check all
+                        entries available. All entries must be of the same
+                        type. (default 'all')
   --perf                Return performance data (failed percentage, round-trip
                         times)
   --critical-pct CRITICAL_PCT
@@ -92,6 +110,16 @@ optional arguments:
                         (default '50')
   --critical CRITICAL   Critical threshold in amount of failed SLAs
   --warning WARNING     Warning threshold in amount of failed SLAs
+  --critical-mos CRITICAL_MOS
+                        Critical threshold for the MOS value of jitter SLAs
+                        (1.00 .. 5.00)
+  --warning-mos WARNING_MOS
+                        Warning threshold for the MOS value of jitter SLAs
+                        (1.00 .. 5.00)
+  --critical-icpif CRITICAL_ICPIF
+                        Critical threshold for the ICPIF value of jitter SLAs
+  --warning-icpif WARNING_ICPIF
+                        Warning threshold for the ICPIF value of jitter SLAs
   --verbose {0,1,2}     Verbose output
 
 ```
@@ -106,13 +134,16 @@ Get a list of all SLAs available on a device
 Example output:
 ```
 SLAs available:
-  10 (tag: New York)
-  20 (tag: Tokio)
-  30 (tag: Amsterdam)
-  40 (tag: London)
+   ID  Type    Tag
+  ---  ------  ----------------------------
+   10  echo    New York
+   20  echo    Tokio
+   30  echo    Amsterdam
+   40  echo    London
+  120  jitter  Jitter from Site-X to Site-Y
 ```
 
-Check a SLA
+Check an SLA
 ```
 ./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode check --entries 10
 ```
@@ -140,7 +171,9 @@ Check via SNMPv3
 Example output:
 ```
 SLAs available:
-  10 (tag: link)
+   ID  Type    Tag
+  ---  ------  --------
+   10  echo    New York
 ```
 
 Check with performance data
@@ -149,8 +182,18 @@ Check with performance data
 ```
 Example output:
 ```
-OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rt 10'=1ms 'rt 20'=4ms 'rt 30'=1ms 'rt 40'=12ms
+OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rtt 10'=1ms 'rtt 20'=4ms 'rtt 30'=1ms 'rtt 40'=12ms
 ```
+
+Check jitter with performance data
+```
+./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 110 --perf
+```
+Example output:
+```
+OK - 1 OK | 'RTT avg'=24.6;17;31 'RTT variance'=571.4 'RTT std dev'=23.9 'Avg jitter'=2 'Avg jitter SD'=3 'Avg jitter DS'=1 'Avg latency SD'=7 'Avg latency DS'=10 'MOS'=4.23 'ICPIF'=11 'Packet loss SD'=0 'Packet loss DS'=0 'Packet out of seq'=0 'Packet MIA'=0 'Packet late arrival'=0 'rtt'=17ms
+```
+
 
 ## Nagios configuration examples
 Command definition examples:
