@@ -709,7 +709,7 @@ class CiscoIpSlaChecker:
     def collect_perfdata_jitter(self, requested_entry):
         jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
         if jitter_info["num_of_rtt"] > 1:
-            self.add_perfdata("'RTT avg{entry}'={avg};{min};{max}".format(
+            self.add_perfdata("'RTT avg{entry}'={avg}ms;{min};{max}".format(
                 entry=self.get_entry_output_id(requested_entry),
                 avg=round(jitter_info["rtt_sum"] / (jitter_info["num_of_rtt"] - 1), 1),
                 min=jitter_info["rtt_min"],

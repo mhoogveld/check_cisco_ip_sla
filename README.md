@@ -35,17 +35,22 @@ Requirements:
 
 Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it
 
-## Output
 
-... describe output ... 
-
-Performance data:
-
-... describe performance data values ...
-
-s
 ## Usage
-For a complete overview run the check with the parameter "--help".
+You can use this plugin to check a single SLA or multiple SLA's of the same type.
+
+Checking multiple SLA's is mostly useful to check general internet connectivity. For example, 
+you could set up an echo SLA to 4 IP's with expected near 100% uptime. Then you could use the 
+--warning or --warning-pct parameters to let the script issue a warning if say 2 go down 
+and in the same way use the critical parameters to issue a critical when more than 2 go down.
+
+Use --mode=list to do a quick check of available SLA's on your Cisco device.
+Use --mode=check to do the actual checking.
+
+Performance data is output when using the --perf parameter.
+See the Output chapter for a description on performance values.
+
+For a complete overview of command-line options, run the check with the parameter "--help".
 
 ```
 $ ./check_cisco_ip_sla.py  --help
@@ -125,14 +130,44 @@ optional arguments:
 ```
 
 
+## Output
+
+This monitoring plugin follows the Nagios plugin guidelines for output.
+In check-mode the return value indicates the status (0 = OK, 1 = WARNING, 2 = CRITICAL and 3 = UNKNOWN)
+The status will also printed as output, as well as some textual description about the status
+Examples can be seen below.
+
+**Performance data**
+
+For all SLA types The Round Trip Time of the latest operation is returned under the key 'rtt',
+or when checking multiple SLA entries at once, under the key 'rtt <entry-tag>' (e.g. 'rtt 10')
+
+For jitter-SLA's the following additional values are returned:
+* RTT avg: The average, min and max of the successfully measured RTT's (example 'RTT avg'=12.2ms;9;24)
+* RTT variance: The variance of measured RTT's (example: 'RTT variance'=571.4)
+* RTT std dev: The standard deviation of measured RTT's (example: 'RTT std dev'=23.9)
+* Avg jitter: The average jitter (example: 'Avg jitter'=2)
+* Avg jitter SD: The average jitter from Source to Destination (example: 'Avg jitter  SD'=3)
+* Avg jitter DS: The average jitter from Destination to Source (example: 'Avg jitter  DS'=1)
+* Avg latency SD: The average latency from Source to Destination (example: 'Avg latency SD'=7)
+* Avg latency DS: The average latency from Destination to Source (example: 'Avg latency DS'=10)
+* MOS: The Mean Opinion Score value (example: 'MOS'=4.23)
+* ICPIF: The Impairment Calculated Planning Impairment Factor value (example: 'ICPIF'=11)
+* Packet loss SD: Packet loss from Source to Destination (example: 'Packet loss SD'=0)
+* Packet loss DS: Packet loss from Destination to Source (example: 'Packet loss DS'=0)
+* Packet out of seq: The number of packets arrived out of sequence (example: 'Packet out of seq'=0)
+* Packet MIA: The number of packets that are lost for which the direction cannot be determined (example: 'Packet MIA'=0)
+* Packet late arrival: The number of packets that arrived after the timeout (example: 'Packet late arrival'=0)
+
+
+## Examples
 
 General use cases:
+
 Get a list of all SLAs available on a device
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode list
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode list
+
 SLAs available:
    ID  Type    Tag
   ---  ------  ----------------------------
@@ -145,31 +180,25 @@ SLAs available:
 
 Check an SLA
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode check --entries 10
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode check --entries 10
+
 OK - 1 OK
 ```
 
 Check multiple SLAs, warning if one goes down, critical if two go down
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode check --entries 10,20,30,40 \
-    --warning-pct 25 --critical-pct 50
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode check --entries 10,20,30,40 \
+        --warning-pct 25 --critical-pct 50
+
 OK - 4 OK
 ```
 
 Check via SNMPv3
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 3 -m list \
-    --security-name example_user --security-level authPriv --password example_passsword \
-    --auth-protocol SHA --priv-protocol AES
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 3 -m list \
+        --security-name example_user --security-level authPriv --password example_passsword \
+        --auth-protocol SHA --priv-protocol AES
+
 SLAs available:
    ID  Type    Tag
   ---  ------  --------
@@ -178,19 +207,15 @@ SLAs available:
 
 Check with performance data
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --perf
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --perf
+
 OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rtt 10'=1ms 'rtt 20'=4ms 'rtt 30'=1ms 'rtt 40'=12ms
 ```
 
 Check jitter with performance data
 ```
-./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 110 --perf
-```
-Example output:
-```
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 110 --perf
+
 OK - 1 OK | 'RTT avg'=24.6;17;31 'RTT variance'=571.4 'RTT std dev'=23.9 'Avg jitter'=2 'Avg jitter SD'=3 'Avg jitter DS'=1 'Avg latency SD'=7 'Avg latency DS'=10 'MOS'=4.23 'ICPIF'=11 'Packet loss SD'=0 'Packet loss DS'=0 'Packet out of seq'=0 'Packet MIA'=0 'Packet late arrival'=0 'rtt'=17ms
 ```
 
