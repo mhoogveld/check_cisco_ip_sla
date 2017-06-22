@@ -187,6 +187,10 @@ class CiscoIpSlaChecker:
         self.print_msg(self.V_DEBUG, " Warning-pct:     {}".format(self.options.warning_pct))
         self.print_msg(self.V_DEBUG, " Critical:        {}".format(self.options.critical))
         self.print_msg(self.V_DEBUG, " Warning:         {}".format(self.options.warning))
+        self.print_msg(self.V_DEBUG, " Critical MOS:    {}".format(self.options.critical_mos))
+        self.print_msg(self.V_DEBUG, " Warning MOS:     {}".format(self.options.warning_mos))
+        self.print_msg(self.V_DEBUG, " Critical ICPIF:  {}".format(self.options.critical_icpif))
+        self.print_msg(self.V_DEBUG, " Warning ICPIF:   {}".format(self.options.warning_icpif))
         self.print_msg(self.V_DEBUG, " Verbosity:       {}".format(self.options.verbose))
         self.print_msg(self.V_DEBUG, "")
 
@@ -285,9 +289,11 @@ class CiscoIpSlaChecker:
         return entry_output_id
 
     def read_rtt_entries(self):
-        """ Reads all RTT entries and stores found data in self.rtt_dict """
+        """ Reads all info on all RTT entries and stores found data in self.rtt_dict """
         # Get SLA entry info
         self.rtt_dict = dict()
+
+        self.print_msg(self.V_DEBUG, "Starting SNMP-walk for rttMonCtrlAdminTable (.1.3.6.1.4.1.9.9.42.1.2.1.1)")
         rtt_ctrl_admin_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.1.1")
         for item in rtt_ctrl_admin_entries:
             oid_parts = str(item.oid).split(".")
@@ -314,6 +320,7 @@ class CiscoIpSlaChecker:
                 self.rtt_dict[rtt_entry]["long_tag"] = str(item.value)
 
         # Get SLA entry status
+        self.print_msg(self.V_DEBUG, "Starting SNMP-walk for rttMonCtrlOperTable (.1.3.6.1.4.1.9.9.42.1.2.9.1)")
         rtt_ctrl_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.9.1")
         for item in rtt_ctrl_oper_entries:
             oid_parts = str(item.oid).split(".")
@@ -354,6 +361,7 @@ class CiscoIpSlaChecker:
                     self.rtt_dict[rtt_entry]["in_active_state"] = False
 
         # Get SLA entry latest result
+        self.print_msg(self.V_DEBUG, "Starting SNMP-walk for rttMonLatestRttOperTable (.1.3.6.1.4.1.9.9.42.1.2.10.1)")
         latest_rtt_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.2.10.1")
         for item in latest_rtt_oper_entries:
             oid_parts = str(item.oid).split(".")
@@ -370,6 +378,7 @@ class CiscoIpSlaChecker:
                 self.rtt_dict[rtt_entry]["latest_sense"] = int(item.value)
 
         # Get Jitter specific data (See "-- LatestJitterOper Table" in MIB)
+        self.print_msg(self.V_DEBUG, "Starting SNMP-walk for rttMonLatestJitterOperTable (.1.3.6.1.4.1.9.9.42.1.5.2.1)")
         latest_jitters = dict()
         latest_jitter_oper_entries = self.session.walk(".1.3.6.1.4.1.9.9.42.1.5.2.1")
         for item in latest_jitter_oper_entries:
@@ -608,6 +617,12 @@ class CiscoIpSlaChecker:
                 self.add_message(str(sla) + "\n")
 
     def get_sla_description(self, rtt_id):
+        """
+        Get a human readable description identifying this SLA entry
+        Consisting of the id and the tag if set
+        :param rtt_id: The id of the SLA
+        :return: A string describing the SLA
+        """
         sla_description = str(rtt_id)
         if self.rtt_dict[rtt_id]["tag"]:
             sla_description += " (tag: {0})".format(self.rtt_dict[rtt_id]["tag"])
@@ -616,6 +631,11 @@ class CiscoIpSlaChecker:
 
     @staticmethod
     def get_rtt_type_description(rtt_type):
+        """
+        Get the string equivalent of a numeric rtt-type
+        :param rtt_type: The rtt-type in numeric form as returned by an SNMP request
+        :return: A string describing the rtt-type or "Unknown" if no match was found
+        """
         rtt_type = int(rtt_type)
         description = "unknown"
         if rtt_type in CiscoIpSlaChecker.rtt_types:
@@ -624,6 +644,11 @@ class CiscoIpSlaChecker:
 
     @staticmethod
     def get_rtt_type_id(rtt_type_description):
+        """
+        Get the numeric equivalent of an rtt-type represented as a astring
+        :param rtt_type_description: The rtt-type in string form
+        :return: The numeric form of the rtt-type or 0 if no match was found
+        """
         for rtt_type_id in CiscoIpSlaChecker.rtt_types:
             if rtt_type_description == CiscoIpSlaChecker.rtt_types[rtt_type_id]:
                 return rtt_type_id
@@ -631,6 +656,12 @@ class CiscoIpSlaChecker:
 
     @staticmethod
     def is_rtt_type_supported(rtt_type):
+        """
+        Returns whether or not the rtt-type is supported.
+        This list of supported rtt-types is planned to be expanded
+        :param rtt_type: The rtt-type in numeric form
+        :return: True if the rtt-type is supported, False otherwise
+        """
         supported_rtt_types = [
             CiscoIpSlaChecker.get_rtt_type_id("echo"),
             CiscoIpSlaChecker.get_rtt_type_id("pathEcho"),
@@ -639,6 +670,13 @@ class CiscoIpSlaChecker:
         return rtt_type in supported_rtt_types
 
     def validate_requested_rtt_entries_types(self, requested_entries):
+        """
+        Checks if the list of requested rtt-types is valid. At this time, this means that the entries
+        must be of the same type. If they are not, the performance data might be returned in an invalid form.
+        Requires read_rtt_entries to have been called.
+        :param requested_entries: A list of (numeric) rtt-entry-ids.
+        :return: True if valid, False otherwise
+        """
         # Create a list of all RTT types used and their count
         rtt_type_count = Counter()
 
@@ -654,8 +692,8 @@ class CiscoIpSlaChecker:
             if not CiscoIpSlaChecker.is_rtt_type_supported(rtt_type):
                 msg = "SLA {0} is of type {1} ({2}) which is not supported (yet)."
                 self.add_message(msg.format(requested_entry,
-                                           rtt_type_description,
-                                           rtt_type))
+                                            rtt_type_description,
+                                            rtt_type))
                 self.add_status(self.STATUS_UNKNOWN)
                 return False
 
@@ -670,6 +708,14 @@ class CiscoIpSlaChecker:
         return True
 
     def check_jitter_health(self, requested_entry):
+        """
+        Checks if the latest jitter entry check went OK by it's sense value,
+        if time is synced between the source and destination
+        and checks the MOS and ICPIF thresholds if they are set.
+        Can adjust the status and messages returned by the check
+        :param requested_entry: The rtt-id in numeric form
+        :return:
+        """
         rtt_id = self.get_sla_description(requested_entry)
 
         latest_jitter = self.rtt_dict[requested_entry]["latest_jitter"]
@@ -707,6 +753,12 @@ class CiscoIpSlaChecker:
                 self.add_message("ICPIF is over warning threshold for SLA {0}".format(rtt_id))
 
     def collect_perfdata_jitter(self, requested_entry):
+        """
+        Collect and save perf-data for the rtt so it gets returned by this check
+        Will adjust the perfdata returned by the check
+        :param requested_entry: The rtt-id in numeric form
+        :return:
+        """
         jitter_info = self.rtt_dict[requested_entry]["latest_jitter"]
         if jitter_info["num_of_rtt"] > 1:
             self.add_perfdata("'RTT avg{entry}'={avg}ms;{min};{max}".format(
@@ -779,6 +831,10 @@ class CiscoIpSlaChecker:
             ))
 
     def check(self):
+        """
+        Perform checks on the requested entries
+        :return:
+        """
         messages = []
         if self.options.entries == "all":
             requested_entries = self.rtt_dict.keys()
