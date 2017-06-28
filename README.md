@@ -1,6 +1,7 @@
 # check_cisco_ip_sla
 Monitoring plugin for checking the status of IP SLAs on Cisco devices
 
+
 ## Overview
 This plugin can check the status of one or more IP SLA entries on a Cisco IOS device. IP SLAs can be used to monitor
 IP service levels for various IP applications and services. See the Cisco website for more details on SLA entries
@@ -11,6 +12,7 @@ for various other tasks. For more info on IP SLA's, see the manual for your Cisc
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
 At the moment, only rtt-type echo and pathEcho are supported and tested (aka icmp-echo and path-echo). Other types
 (like jitter) need to be implemented or at least tested. Suggestions and/or help is always welcome.
+
 
 ## Changelist
 * v1.0.0 (2016-02-08)
@@ -27,6 +29,7 @@ the RTT-MIB was installed on the system.
   * Added support for rtt-type jitter with MOS and ICPIF thresholds and extensive perf data
   * Removed sla tag suffix in perf data when checking only one entry
 
+
 ## Installation
 Requirements:
 * Python version 2 or 3 (tested on 2.7+ or 3.4+)
@@ -41,16 +44,16 @@ You can use this plugin to check a single SLA or multiple SLA's of the same type
 
 Checking multiple SLA's is mostly useful to check general internet connectivity. For example, 
 you could set up an echo SLA to 4 IP's with expected near 100% uptime. Then you could use the 
---warning or --warning-pct parameters to let the script issue a warning if say 2 go down 
-and in the same way use the critical parameters to issue a critical when more than 2 go down.
+either the --warning or the --warning-pct parameter to let the script issue a warning if say 2 go down 
+and in the same way use a critical parameter to issue a critical when more than 2 go down.
 
-Use --mode=list to do a quick check of available SLA's on your Cisco device.
-Use --mode=check to do the actual checking.
+Use "--mode list" to do a quick check of available SLA's on your Cisco device.
+Use "--mode check" to do the actual checking.
 
 Performance data is output when using the --perf parameter.
 See the Output chapter for a description on performance values.
 
-For a complete overview of command-line options, run the check with the parameter "--help".
+For a complete overview of command-line options, run the check with the parameter --help.
 
 ```
 $ ./check_cisco_ip_sla.py  --help
@@ -134,30 +137,36 @@ optional arguments:
 
 This monitoring plugin follows the Nagios plugin guidelines for output.
 In check-mode the return value indicates the status (0 = OK, 1 = WARNING, 2 = CRITICAL and 3 = UNKNOWN)
-The status will also printed as output, as well as some textual description about the status
+The status will also be printed as output, as well as some textual description about the status
 Examples can be seen below.
+
 
 **Performance data**
 
-For all SLA types The Round Trip Time of the latest operation is returned under the key 'rtt',
-or when checking multiple SLA entries at once, under the key 'rtt <entry-tag>' (e.g. 'rtt 10')
+Use the --perf parameter to make the script output performance data.
+
+For all SLA types the Round Trip Time of the latest operation is returned:
+* 'rtt': The RTT of the latest operation
+
+or when checking multiple SLA entries at once:
+* 'rtt <entry-tag>': The RTT of the latest operation for each entry (e.g. 'rtt 10')
 
 For jitter-SLA's the following additional values are returned:
-* RTT avg: The average, min and max of the successfully measured RTT's (example 'RTT avg'=12.2ms;9;24)
-* RTT variance: The variance of measured RTT's (example: 'RTT variance'=571.4)
-* RTT std dev: The standard deviation of measured RTT's (example: 'RTT std dev'=23.9)
-* Avg jitter: The average jitter (example: 'Avg jitter'=2)
-* Avg jitter SD: The average jitter from Source to Destination (example: 'Avg jitter  SD'=3)
-* Avg jitter DS: The average jitter from Destination to Source (example: 'Avg jitter  DS'=1)
-* Avg latency SD: The average latency from Source to Destination (example: 'Avg latency SD'=7)
-* Avg latency DS: The average latency from Destination to Source (example: 'Avg latency DS'=10)
-* MOS: The Mean Opinion Score value (example: 'MOS'=4.23)
-* ICPIF: The Impairment Calculated Planning Impairment Factor value (example: 'ICPIF'=11)
-* Packet loss SD: Packet loss from Source to Destination (example: 'Packet loss SD'=0)
-* Packet loss DS: Packet loss from Destination to Source (example: 'Packet loss DS'=0)
-* Packet out of seq: The number of packets arrived out of sequence (example: 'Packet out of seq'=0)
-* Packet MIA: The number of packets that are lost for which the direction cannot be determined (example: 'Packet MIA'=0)
-* Packet late arrival: The number of packets that arrived after the timeout (example: 'Packet late arrival'=0)
+* 'RTT avg': The average, min and max of the successfully measured RTT's (example 'RTT avg'=12.2ms;9;24)
+* 'RTT variance': The variance of measured RTT's (example: 'RTT variance'=571.4)
+* 'RTT std dev': The standard deviation of measured RTT's (example: 'RTT std dev'=23.9)
+* 'Avg jitter': The average jitter (example: 'Avg jitter'=2)
+* 'Avg jitter SD': The average jitter from Source to Destination (example: 'Avg jitter  SD'=3)
+* 'Avg jitter DS': The average jitter from Destination to Source (example: 'Avg jitter  DS'=1)
+* 'Avg latency SD': The average latency from Source to Destination (example: 'Avg latency SD'=7)
+* 'Avg latency DS': The average latency from Destination to Source (example: 'Avg latency DS'=10)
+* 'MOS': The Mean Opinion Score value (example: 'MOS'=4.23)
+* 'ICPIF': The Impairment Calculated Planning Impairment Factor value (example: 'ICPIF'=11)
+* 'Packet loss SD': Packet loss from Source to Destination (example: 'Packet loss SD'=0)
+* 'Packet loss DS': Packet loss from Destination to Source (example: 'Packet loss DS'=0)
+* 'Packet out of seq': The number of packets arrived out of sequence (example: 'Packet out of seq'=0)
+* 'Packet MIA': The number of packets that are lost for which the direction cannot be determined (example: 'Packet MIA'=0)
+* 'Packet late arrival': The number of packets that arrived after the timeout (example: 'Packet late arrival'=0)
 
 
 ## Examples
@@ -170,12 +179,12 @@ $ ./check_cisco_ip_sla.py --hostname 192.168.0.1 --community public --mode list
 
 SLAs available:
    ID  Type    Tag
-  ---  ------  ----------------------------
-   10  echo    New York
-   20  echo    Tokio
-   30  echo    Amsterdam
-   40  echo    London
-  120  jitter  Jitter from Site-X to Site-Y
+  ----  ------  ----------------------------
+    10  echo    New York
+    20  echo    Tokio
+    30  echo    Amsterdam
+    40  echo    London
+  2600  jitter  Jitter from Site-X to Site-Y
 ```
 
 Check an SLA
@@ -214,7 +223,7 @@ OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rtt 10'=1ms 'rtt 20'=4ms 'rtt 30'=1ms '
 
 Check jitter with performance data
 ```
-$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 110 --perf
+$ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 2600 --perf
 
 OK - 1 OK | 'RTT avg'=24.6;17;31 'RTT variance'=571.4 'RTT std dev'=23.9 'Avg jitter'=2 'Avg jitter SD'=3 'Avg jitter DS'=1 'Avg latency SD'=7 'Avg latency DS'=10 'MOS'=4.23 'ICPIF'=11 'Packet loss SD'=0 'Packet loss DS'=0 'Packet out of seq'=0 'Packet MIA'=0 'Packet late arrival'=0 'rtt'=17ms
 ```
@@ -225,12 +234,43 @@ Command definition examples:
 ```
 define command {
     command_name                    check_cisco_sla
+    command_line                    path/to/check_cisco_ip_sla.py --hostname $HOSTADDRESS$ -v 3 --security-name "$ARG1$" --password "$ARG2$"  --mode check --entries "$ARG3$" --warning-pct "$ARG4$" --critical-pct "$ARG5$"
+    ;command_example                !username!password!10,20!60!80
+    ;$ARG1$                         SNMP-v3 Username
+    ;$ARG2$                         SNMP-v3 auth and priv password
+    ;$ARG3$                         SLA(s) as comma separated list
+    ;$ARG4$                         Warning threshold (percentage SLAs failed)
+    ;$ARG5$                         Critical threshold (percentage SLAs failed)
+}
+
+define command {
+    command_name                    check_cisco_sla_jitter
+    command_line                    path/to/check_cisco_ip_sla.py --hostname $HOSTADDRESS$ -v 3 --security-name "$ARG1$" --password "$ARG2$"  --mode check --entries "$ARG3$" --warning-mos "$ARG4$" --critical-mos "$ARG5$" --perf
+    ;command_example                !username!password!10,20!3!2
+    ;$ARG1$                         SNMP-v3 Username
+    ;$ARG2$                         SNMP-v3 auth and priv password
+    ;$ARG3$                         SLA(s) as comma separated list
+    ;$ARG4$                         Warning threshold (MOS value)
+    ;$ARG5$                         Critical threshold (MOS value)
+}
+
+define command {
+    command_name                    check_cisco_sla_v2
     command_line                    path/to/check_cisco_ip_sla.py --hostname $HOSTADDRESS$ -v 2 --community "$ARG1$" --mode check --entries "$ARG2$" --warning-pct "$ARG3$" --critical-pct "$ARG4$"
     ;command_example                !public!10,20!60!80
     ;$ARG1$                         SNMP Community
     ;$ARG2$                         SLA(s) as comma separated list
     ;$ARG3$                         Warning threshold (percentage SLAs failed)
     ;$ARG4$                         Critical threshold (percentage SLAs failed)
+}
+
+define command {
+    command_name                    check_cisco_sla_v2_all
+    command_line                    path/to/check_cisco_ip_sla.py --hostname $HOSTADDRESS$ -v 2 --community "$ARG1$" --mode check --entries all --warning-pct "$ARG3$" --critical-pct "$ARG4$" --perf
+    ;command_example                !public!60!80
+    ;$ARG1$                         SNMP Community
+    ;$ARG2$                         Warning threshold (percentage SLAs failed)
+    ;$ARG3$                         Critical threshold (percentage SLAs failed)
 }
 ```
 
@@ -239,10 +279,36 @@ Service template examples:
 define service {
     name                            cisco-sla-check
     service_description             Cisco SLA - Check entries
-    use                             cisco-sla-check-generic-no-perf
-    check_command                   check_cisco_sla_all!~!~!~!~
+    use                             generic-service
+    process_perf_data               0
+    check_command                   check_cisco_sla!~!~!~!~!~
+    ;$ARG1$                         SNMP-v3 Username
+    ;$ARG2$                         SNMP-v3 auth and priv password
+    ;$ARG3$                         SLA(s) as comma separated list
+    ;$ARG4$                         Warning threshold (percentage SLAs failed)
+    ;$ARG5$                         Critical threshold (percentage SLAs failed)
+    register                        0
+}
+
+define service {
+    name                            cisco-sla-check-jitter
+    service_description             Cisco SLA - Check jitter
+    use                             generic-service
+    check_command                   check_cisco_sla_jitter!~!~!~!~!~
+    ;$ARG1$                         SNMP-v3 Username
+    ;$ARG2$                         SNMP-v3 auth and priv password
+    ;$ARG3$                         SLA(s) as comma separated list
+    ;$ARG4$                         Warning threshold (MOS value)
+    ;$ARG5$                         Critical threshold (MOS value)
+    register                        0
+}
+
+define service {
+    name                            cisco-sla-check-v2-all
+    service_description             Cisco SLA - Check entries
+    use                             generic-service
+    check_command                   check_cisco_sla_v2_all!~!~!~
     ;$ARG1$                         SNMP Community
-    ;$ARG2$                         SLA(s) as comma separated list
     ;$ARG3$                         Warning level (in percent SLAs failed)
     ;$ARG4$                         Critical level (in percent SLAs failed)
     register                        0
@@ -252,10 +318,24 @@ define service {
 Service definition examples:
 ```
 define service {
-    host_name                       cisco01.example.com
-    service_description             Cisco SLA - Check entries
+    host_name                       cisco03.example.com
+    service_description             Cisco SLA - Check line to NY
     use                             cisco-sla-check
-    check_command                   check_cisco_sla!$USER10$!10,20,30,40,50,60!60!80
+    check_command                   check_cisco_sla!$USER11$!$USER12$!10!60!80
+}
+
+define service {
+    host_name                       cisco03.example.com
+    service_description             Cisco SLA - Check jitter
+    use                             cisco-sla-check-jitter
+    check_command                   check_cisco_sla_jitter!$USER11$!$USER12$!2600!60!80
+}
+
+define service {
+    host_name                       cisco02.example.com
+    service_description             Cisco SLA - Check entries
+    use                             cisco-sla-check-v2-all
+    check_command                   check_cisco_sla_v2_all!$USER10$!60!80
 }
 ```
 
