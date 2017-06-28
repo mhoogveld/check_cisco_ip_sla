@@ -10,8 +10,8 @@ ping the other end of each line. SLA's can be set up to monitor a line/route and
 corresponding SLA will go down which this plugin can monitor. This is just one example, however SLAs can be configured
 for various other tasks. For more info on IP SLA's, see the manual for your Cisco device on IP SLA's. An example is
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
-At the moment, only rtt-type echo and pathEcho are supported and tested (aka icmp-echo and path-echo). Other types
-(like jitter) need to be implemented or at least tested. Suggestions and/or help is always welcome.
+At the moment, rtt-types echo, pathEcho and jitter are supported and tested (aka icmp-echo, path-echo and udp-jitter). 
+Other types need to be implemented or at least tested. Suggestions and/or help is always welcome.
 
 
 ## Changelist
@@ -25,7 +25,7 @@ the RTT-MIB was installed on the system.
   * Added warning when checking unsupported IP SLA types.
   * IMPORTANT backward incompatible change: Repurposed the '--version' parameter from setting the snmp-version to displaying the scripts version. 
     To specify the snmp version, use '-v' or '--snmp-version'
-* v1.1.0 (2017-TBD)
+* v1.1.0 (2017-06-28)
   * Added support for rtt-type jitter with MOS and ICPIF thresholds and extensive perf data
   * Removed sla tag suffix in perf data when checking only one entry
 
