@@ -10,6 +10,7 @@ This is just one example, however SLAs can be configured for various other tasks
 For more info on IP SLA's, see the manual for your Cisco device on IP SLA's.
 """
 
+from __future__ import division, print_function, absolute_import
 import argparse
 import math
 from decimal import *
@@ -251,8 +252,8 @@ class CiscoIpSlaChecker:
     def create_snmp_session(self):
         self.session = Session(
             hostname=self.options.hostname,
-            community=self.options.community,
             version=int(self.options.snmp_version),
+            community=self.options.community,
             security_username=self.options.security_name,
             security_level=self.options.security_level,
             auth_protocol=self.options.auth_protocol,
@@ -386,7 +387,7 @@ class CiscoIpSlaChecker:
             rtt_info_type = oid_parts[-1]
             rtt_entry = str(item.oid_index)
 
-            if not rtt_entry in latest_jitters:
+            if rtt_entry not in latest_jitters:
                 latest_jitters[rtt_entry] = dict()
 
             try:
@@ -490,10 +491,10 @@ class CiscoIpSlaChecker:
 
                 elif "42" == rtt_info_type:
                     # rttMonLatestJitterOperMOS (42)
-                    MOS = Decimal(item.value)
-                    if MOS >= 100:
-                        MOS = MOS / 100
-                    latest_jitters[rtt_entry]["MOS"] = MOS
+                    mos = Decimal(item.value)
+                    if mos >= 100:
+                        mos = mos / 100
+                    latest_jitters[rtt_entry]["MOS"] = mos
 
                 elif "43" == rtt_info_type:
                     # rttMonLatestJitterOperICPIF (43)
