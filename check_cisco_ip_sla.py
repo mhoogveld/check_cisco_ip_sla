@@ -667,6 +667,7 @@ class CiscoIpSlaChecker:
             CiscoIpSlaChecker.get_rtt_type_id("echo"),
             CiscoIpSlaChecker.get_rtt_type_id("pathEcho"),
             CiscoIpSlaChecker.get_rtt_type_id("jitter"),
+            CiscoIpSlaChecker.get_rtt_type_id("http"),
         ]
         return rtt_type in supported_rtt_types
 
