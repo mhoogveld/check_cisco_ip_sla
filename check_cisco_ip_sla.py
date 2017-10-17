@@ -379,13 +379,11 @@ class CiscoIpSlaChecker:
                 self.rtt_dict[rtt_entry]["latest_sense"] = int(item.value)
                 if item.value == "14":
                     self.rtt_dict[rtt_entry]["dns_query_error"] = True
-                    self.options.perf =False
                 else:
                     self.rtt_dict[rtt_entry]["dns_query_error"] = False
 
                 if item.value == "15":
                     self.rtt_dict[rtt_entry]["http_error"] = True
-                    self.options.perf =False
                 else:
                     self.rtt_dict[rtt_entry]["http_error"] = False
 
@@ -881,9 +879,11 @@ class CiscoIpSlaChecker:
                 elif self.rtt_dict[requested_entry]["dns_query_error"]:
                     failed_count += 1
                     messages.append("DNS query error for SLA {0}".format(sla_description))
+                    self.options.perf = False
                 elif self.rtt_dict[requested_entry]["http_error"]:
                     failed_count += 1
                     messages.append("HTTP error for SLA {0}".format(sla_description))
+                    self.options.perf = False
                 else:
                     ok_count += 1
             else:
