@@ -377,6 +377,17 @@ class CiscoIpSlaChecker:
                 # rttMonLatestRttOperSense (2)
                 # See http://www.circitor.fr/Mibs/Html/CISCO-RTTMON-TC-MIB.php#RttResponseSense
                 self.rtt_dict[rtt_entry]["latest_sense"] = int(item.value)
+                if item.value == "14":
+                    self.rtt_dict[rtt_entry]["dns_query_error"] = True
+                    self.options.perf =False
+                else:
+                    self.rtt_dict[rtt_entry]["dns_query_error"] = False
+
+                if item.value == "15":
+                    self.rtt_dict[rtt_entry]["http_error"] = True
+                    self.options.perf =False
+                else:
+                    self.rtt_dict[rtt_entry]["http_error"] = False
 
         # Get Jitter specific data (See "-- LatestJitterOper Table" in MIB)
         self.print_msg(self.V_DEBUG, "Starting SNMP-walk for rttMonLatestJitterOperTable (.1.3.6.1.4.1.9.9.42.1.5.2.1)")
@@ -867,6 +878,12 @@ class CiscoIpSlaChecker:
                 elif self.rtt_dict[requested_entry]["over_thres_occurred"]:
                     failed_count += 1
                     messages.append("Threshold exceeded for SLA {0}".format(sla_description))
+                elif self.rtt_dict[requested_entry]["dns_query_error"]:
+                    failed_count += 1
+                    messages.append("DNS query error for SLA {0}".format(sla_description))
+                elif self.rtt_dict[requested_entry]["http_error"]:
+                    failed_count += 1
+                    messages.append("HTTP error for SLA {0}".format(sla_description))
                 else:
                     ok_count += 1
             else:
