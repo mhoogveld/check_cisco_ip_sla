@@ -72,8 +72,6 @@ class CiscoIpSlaChecker:
 
         # A list of all RTT types requested and their use-count
         self.requested_entries = []
-        self.ok_count = 0
-        self.failed_count = 0
 
     def run(self):
         self.parse_options()
@@ -127,7 +125,43 @@ class CiscoIpSlaChecker:
             self.check_fail_percentages()
 
     def check_fail_percentages(self):
+        failed_count = 0
+        ok_count = 0
+        for entry in self.rtt_dict:
+            if self.rtt_dict[entry]['failed']:
+                failed_count += 1
+            else:
+                ok_count += 1
+                
+        failed_pct = round(float(failed_count) / (failed_count + ok_count) * 100, 1)
 
+        # Check percentage thresholds (if set)
+        if self.options.critical_pct is not None and failed_pct >= self.options.critical_pct:
+            self.add_status(self.STATUS_CRITICAL)
+        if self.options.warning_pct is not None and failed_pct >= self.options.warning_pct:
+            self.add_status(self.STATUS_WARNING)
+
+        # Check absolute thresholds (if set)
+        if self.options.critical is not None and failed_count >= self.options.critical:
+            self.add_status(self.STATUS_CRITICAL)
+        if self.options.warning is not None and failed_count >= self.options.warning:
+            self.add_status(self.STATUS_WARNING)
+
+        if failed_count:
+            # Don't show percentage-failed when only checking one SLA
+            if failed_count + ok_count == 1:
+                self.add_message('{0} Failed'.format(failed_count), True)
+            else:
+                self.add_message('{0} Failed ({1}%)'.format(failed_count, failed_pct), True)
+        if ok_count:
+            self.add_message('{0} OK'.format(ok_count), True)
+
+        if self.options.perf:
+            if failed_count + ok_count > 1:
+                failed_perf = "'Failed%'={0}%".format(failed_pct)
+                if self.options.critical_pct and self.options.warning_pct:
+                    failed_perf += ';{0};{1};0;100'.format(self.options.warning_pct, self.options.critical_pct)
+                self.add_perfdata(failed_perf)
 
     def check_basic_entry_info(self):
         self.print_msg(self.V_DEBUG, 'Checking basic info for requested entries')
@@ -154,36 +188,6 @@ class CiscoIpSlaChecker:
 
     def check_echo_entry_info(self):
         self.print_msg(self.V_DEBUG, 'Checking echo entries')
-
-        failed_pct = round(float(self.failed_count) / (self.failed_count + self.ok_count) * 100, 1)
-
-        # Check percentage thresholds (if set)
-        if self.options.critical_pct is not None and failed_pct >= self.options.critical_pct:
-            self.add_status(self.STATUS_CRITICAL)
-        if self.options.warning_pct is not None and failed_pct >= self.options.warning_pct:
-            self.add_status(self.STATUS_WARNING)
-
-        # Check absolute thresholds (if set)
-        if self.options.critical is not None and self.failed_count >= self.options.critical:
-            self.add_status(self.STATUS_CRITICAL)
-        if self.options.warning is not None and self.failed_count >= self.options.warning:
-            self.add_status(self.STATUS_WARNING)
-
-        if self.failed_count:
-            # Don't show percentage-failed when only checking one SLA
-            if self.failed_count + self.ok_count == 1:
-                self.add_message_before('{0} Failed'.format(self.failed_count))
-            else:
-                self.add_message_before('{0} Failed ({1}%)'.format(self.failed_count, failed_pct))
-        if self.ok_count:
-            self.add_message_before('{0} OK'.format(self.ok_count))
-
-        if self.options.perf:
-            if self.failed_count + self.ok_count > 1:
-                failed_perf = "'Failed%'={0}%".format(failed_pct)
-                if self.options.critical_pct and self.options.warning_pct:
-                    failed_perf += ';{0};{1};0;100'.format(self.options.warning_pct, self.options.critical_pct)
-                self.add_perfdata(failed_perf)
 
         if self.options.perf:
             for requested_entry in self.requested_entries:
@@ -349,7 +353,7 @@ class CiscoIpSlaChecker:
         else:
             self.requested_entries = self.options.entries.replace(' ', '').split(',')
         self.requested_entries.sort(key=int)
-        for
+
         self.print_msg(self.V_DEBUG, 'Requested entries: ' + ", ".join(self.requested_entries))
 
     def validate_requested_rtt_entries_types(self):
