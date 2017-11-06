@@ -395,8 +395,13 @@ class CiscoIpSlaChecker:
         return True
 
     def is_rtt_type_requested(self, rtt_type):
-        # TODO Does this go well if rtt_type is already an RttType instance
-        rtt_type = RttType(rtt_type)
+        """
+        Returns whether or not the specified rtt-type is supported by this script
+        :param rtt_type: The rtt-type in numeric, string or RttType form
+        :return: True if the rtt-type is requested, False otherwise
+        """
+        if not isinstance(rtt_type, RttType):
+            rtt_type = RttType(rtt_type)
         self.print_msg(self.V_DEBUG, 'Is entry type {} ({}) requested?'.format(rtt_type.description, rtt_type.id))
 
         for requested_entry in self.requested_entries:
@@ -408,6 +413,24 @@ class CiscoIpSlaChecker:
                 if self.rtt_dict[requested_entry].type == rtt_type:
                     return True
         return False
+
+    @staticmethod
+    def is_rtt_type_supported(rtt_type):
+        """
+        Returns whether or not the rtt-type is supported.
+        This list of supported rtt-types is planned to be expanded
+        :param rtt_type: The rtt-type in numeric, string or RttType form
+        :return: True if the rtt-type is supported, False otherwise
+        """
+        supported_rtt_types = [
+            RttType.ECHO,
+            RttType.PATH_ECHO,
+            RttType.JITTER,
+            RttType.HTTP,
+        ]
+        if not isinstance(rtt_type, RttType):
+            rtt_type = RttType(rtt_type)
+        return rtt_type in supported_rtt_types
 
     def print_msg(self, minimum_verbosity_level, msg):
         """
@@ -492,24 +515,6 @@ class CiscoIpSlaChecker:
             entry_output_id = ''
 
         return entry_output_id
-
-    @staticmethod
-    def is_rtt_type_supported(rtt_type):
-        """
-        Returns whether or not the rtt-type is supported.
-        This list of supported rtt-types is planned to be expanded
-        :param rtt_type: The rtt-type in numeric, string or RttType form
-        :return: True if the rtt-type is supported, False otherwise
-        """
-        supported_rtt_types = [
-            RttType.ECHO,
-            RttType.PATH_ECHO,
-            RttType.JITTER,
-            RttType.HTTP,
-        ]
-        if not isinstance(rtt_type, RttType):
-            rtt_type = RttType(rtt_type)
-        return rtt_type in supported_rtt_types
 
     def read_all_rtt_entry_basic_info(self):
         """ Reads all info on all RTT entries and stores found data in self.rtt_dict """
@@ -1208,7 +1213,7 @@ class RttType:
         return self.description
 
     def __repr__(self):
-        return 'RttType(id=' + self.id + ', description=' + self.description + ')'
+        return 'RttType(id=' + str(self.id) + ', description=' + self.description + ')'
 
     @property
     def description(self):
@@ -1245,8 +1250,8 @@ class RttType:
 
 
 class Rtt:
-    def __init__(self, id):
-        self._id = id
+    def __init__(self, rtt_id):
+        self._id = rtt_id
         self._owner = None
         self._tag = None
         self._type = None
@@ -1384,14 +1389,14 @@ class Rtt:
 
 
 class RttEcho(Rtt):
-    def __init__(self, id, rtt_type):
-        Rtt.__init__(self, id)
+    def __init__(self, rtt_id, rtt_type):
+        Rtt.__init__(self, rtt_id)
         self.type = rtt_type
 
 
 class RttJitter(Rtt):
-    def __init__(self, id, rtt_type):
-        Rtt.__init__(self, id)
+    def __init__(self, rtt_id, rtt_type):
+        Rtt.__init__(self, rtt_id)
         self.type = rtt_type
         self.latest_jitter = self.LatestJitter()
 
@@ -1645,7 +1650,7 @@ class RttJitter(Rtt):
         def mos(self, value):
             mos = Decimal(value)
             if mos >= 100:
-                mos = mos / 100
+                mos /= 100
             self._mos = mos
 
         @property
@@ -1770,8 +1775,8 @@ class RttJitter(Rtt):
 
 
 class RttHttp(Rtt):
-    def __init__(self, id, rtt_type):
-        Rtt.__init__(self, id)
+    def __init__(self, rtt_id, rtt_type):
+        Rtt.__init__(self, rtt_id)
         self.type = rtt_type
         self.latest_http = self.LatestHttp()
 
