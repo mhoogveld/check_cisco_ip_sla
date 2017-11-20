@@ -19,7 +19,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 __email__ = "maarten@hoogveld.org"
 __licence__ = "GPL-3.0"
 __status__ = "Production"
@@ -838,7 +838,7 @@ class CiscoIpSlaChecker:
         """
         messages = []
         if self.options.entries == "all":
-            requested_entries = self.rtt_dict.keys()
+            requested_entries = list(self.rtt_dict.keys())
         else:
             requested_entries = self.options.entries.replace(" ", "").split(",")
         requested_entries.sort(key=int)
@@ -924,6 +924,7 @@ class CiscoIpSlaChecker:
                             v=self.rtt_dict[requested_entry]["latest_completion_time"]
                         )
                     )
+
 
 if __name__ == "__main__":
     checker = CiscoIpSlaChecker()

@@ -28,6 +28,8 @@ the RTT-MIB was installed on the system.
 * v1.1.0 (2017-06-28)
   * Added support for rtt-type jitter with MOS and ICPIF thresholds and extensive perf data
   * Removed sla tag suffix in perf data when checking only one entry
+* v1.1.1 (2017-11-20)
+  * Fixed bug regarding dict sorting when using python3 icw parameter "--entries all"
 
 
 ## Installation
