@@ -653,7 +653,7 @@ class CiscoIpSlaChecker:
                 elif '2' == rtt_info_type:
                     # rttMonLatestRttOperSense (2)
                     # See http://www.circitor.fr/Mibs/Html/CISCO-RTTMON-TC-MIB.php#RttResponseSense
-                    cur_rtt.latest_sense = item.value
+                    cur_rtt.latest_sense = RttResponseSense(item.value)
 
             except ValueError as e:
                 self.print_msg(
@@ -706,7 +706,7 @@ class CiscoIpSlaChecker:
 
                 if '6' == rtt_info_type:
                     # rttMonLatestHTTPOperSense (6)
-                    cur_rtt.latest_http.sense = int(item.value)
+                    cur_rtt.latest_http.sense = RttResponseSense(item.value)
 
                 if '7' == rtt_info_type:
                     # rttMonLatestHTTPErrorSenseDescription (7)
@@ -831,7 +831,7 @@ class CiscoIpSlaChecker:
 
                 elif '31' == rtt_info_type:
                     # rttMonLatestJitterOperSense (31)
-                    cur_rtt.latest_jitter.sense = item.value
+                    cur_rtt.latest_jitter.sense = RttResponseSense(item.value)
 
                 elif '32' == rtt_info_type:
                     # rttMonLatestJitterErrorSenseDescription (32)
@@ -957,14 +957,14 @@ class CiscoIpSlaChecker:
         if not isinstance(rtt, RttHttp):
             raise RuntimeError('collect_perfdata_http() requested for entry which is not of type RttHttp')
 
-        if rtt.latest_http.sense == 15:  # httpError (15)
+        if rtt.latest_http.sense == RttResponseSense.HTTP_ERROR:
             self.add_status(self.STATUS_WARNING)
             self.add_message('HTTP error for SLA {0}. HTTP response: {1}'.format(
                 rtt.description, rtt.latest_http.sense_description))
-        elif rtt.latest_http.sense != 1:  # ok (1)
+        elif rtt.latest_http.sense != RttResponseSense.OK:
             self.add_status(self.STATUS_WARNING)
-            self.add_message('Latest http operation not ok for SLA {0}. Description: {1}'.format(
-                rtt.description, rtt.latest_http.sense_description))
+            self.add_message('Latest http operation gave {sense} for SLA {sla}. Description: {descr}'.format(
+                sense=rtt.latest_http.sense, sla=rtt.description, descr=rtt.latest_http.sense_description))
 
         # TODO Needs to be implemented
         # Check rtt thresholds (if set)
@@ -1024,10 +1024,10 @@ class CiscoIpSlaChecker:
         if not isinstance(rtt, RttJitter):
             raise RuntimeError('check_jitter_health() requested for entry which is not of type RttJitter')
 
-        if rtt.latest_jitter.sense != 1:  # ok (1)
+        if rtt.latest_jitter.sense != RttResponseSense.OK:
             self.add_status(self.STATUS_WARNING)
-            self.add_message('Latest jitter operation not ok for SLA {0}: {1}'.format(
-                rtt.description, rtt.latest_jitter.sense_description))
+            self.add_message('Latest jitter operation gave {sense} for SLA {sla} (descr: {descr})'.format(
+                sense=rtt.latest_jitter.sense, sla=rtt.description, descr=rtt.latest_jitter.sense_description))
 
         if not rtt.latest_jitter.ntp_sync:
             self.add_status(self.STATUS_WARNING)
@@ -1141,6 +1141,150 @@ class CiscoIpSlaChecker:
             ))
 
 
+class RttResponseSense:
+    OTHER = 0
+    OK = 1
+    DISCONNECTED = 2
+    OVER_THRESHOLD = 3
+    TIMEOUT = 4
+    BUSY = 5
+    NOT_CONNECTED = 6
+    DROPPED = 7
+    SEQUENCE_ERROR = 8
+    VERIFY_ERROR = 9
+    APPLICATION_SPECIFIC = 10
+    DNS_SERVER_TIMEOUT = 11
+    TCP_CONNECT_TIMEOUT = 12
+    HTTP_TRANSACTION_TIMEOUT = 13
+    DNS_QEURY_ERROR = 14
+    HTTP_ERROR = 15
+    ERROR = 16
+    MPLS_LSP_ECHO_TX_ERROR = 17
+    MPLS_LSP_UNREACHABLE = 18
+    MPLS_LSP_MALFORMED_REQ = 19
+    MPLS_LSP_REACH_NUT_NOT_FEC = 20
+    ENABLE_OK = 21
+    ENABLE_NO_CONNECT = 22
+    ENABLE_VERSION_FAIL = 23
+    ENABLE_INTERNAL_ERROR = 24
+    ENABLE_ABORT = 25
+    ENABLE_FAIL = 26
+    ENABLE_AUTH_FAIL = 27
+    ENABLE_FORMAT_ERROR = 28
+    ENABLE_PORT_IN_USE = 29
+    STATS_RETRIEVE_OK = 30
+    STATS_RETRIEVE_NO_CONNECT = 31
+    STATS_RETRIEVE_VERSION_FAIL = 32
+    STATS_RETRIEVE_INTERNAL_ERROR = 33
+    STATS_RETRIEVE_ABORT = 34
+    STATS_RETRIEVE_FAIL = 35
+    STATS_RETRIEVE_AUTH_FAIL = 36
+    STATS_RETRIEVE_FORMAT_ERROR = 37
+    STATS_RETRIEVE_PORT_IN_USE = 38
+
+    sense_values = {
+        OTHER: 'other',
+        OK: 'ok',
+        DISCONNECTED: 'disconnected',
+        OVER_THRESHOLD: 'overThreshold',
+        TIMEOUT: 'timeout',
+        BUSY: 'busy',
+        NOT_CONNECTED: 'notConnected',
+        DROPPED: 'dropped',
+        SEQUENCE_ERROR: 'sequenceError',
+        VERIFY_ERROR: 'verifyError',
+        APPLICATION_SPECIFIC: 'applicationSpecific',
+        DNS_SERVER_TIMEOUT: 'dnsServerTimeout',
+        TCP_CONNECT_TIMEOUT: 'tcpConnectTimeout',
+        HTTP_TRANSACTION_TIMEOUT: 'httpTransactionTimeout',
+        DNS_QEURY_ERROR: 'dnsQueryError',
+        HTTP_ERROR: 'httpError',
+        ERROR: 'error',
+        MPLS_LSP_ECHO_TX_ERROR: 'mplsLspEchoTxError',
+        MPLS_LSP_UNREACHABLE: 'mplsLspUnreachable',
+        MPLS_LSP_MALFORMED_REQ: 'mplsLspMalformedReq',
+        MPLS_LSP_REACH_NUT_NOT_FEC: 'mplsLspReachButNotFEC',
+        ENABLE_OK: 'enableOk',
+        ENABLE_NO_CONNECT: 'enableNoConnect',
+        ENABLE_VERSION_FAIL: 'enableVersionFail',
+        ENABLE_INTERNAL_ERROR: 'enableInternalError',
+        ENABLE_ABORT: 'enableAbort',
+        ENABLE_FAIL: 'enableFail',
+        ENABLE_AUTH_FAIL: 'enableAuthFail',
+        ENABLE_FORMAT_ERROR: 'enableFormatError',
+        ENABLE_PORT_IN_USE: 'enablePortInUse',
+        STATS_RETRIEVE_OK: 'statsRetrieveOk',
+        STATS_RETRIEVE_NO_CONNECT: 'statsRetrieveNoConnect',
+        STATS_RETRIEVE_VERSION_FAIL: 'statsRetrieveVersionFail',
+        STATS_RETRIEVE_INTERNAL_ERROR: 'statsRetrieveInternalError',
+        STATS_RETRIEVE_ABORT: 'statsRetrieveAbort',
+        STATS_RETRIEVE_FAIL: 'statsRetrieveFail',
+        STATS_RETRIEVE_AUTH_FAIL: 'statsRetrieveAuthFail',
+        STATS_RETRIEVE_FORMAT_ERROR: 'statsRetrieveFormatError',
+        STATS_RETRIEVE_PORT_IN_USE: 'statsRetrievePortInUse',
+    }
+
+    def __init__(self, sense):
+        try:
+            sense_id = int(sense)
+        except ValueError:
+            sense_id = RttResponseSense.id_from_description(sense)
+
+        if int(sense_id) in self.sense_values:
+            self._sense_id = int(sense_id)
+        else:
+            raise ValueError('Invalid RttResponseSense')
+
+    def __eq__(self, other):
+        if not isinstance(other, RttResponseSense):
+            other = RttResponseSense(other)
+        return self.id == other.id
+
+    def __ne__(self, other):
+        if not isinstance(other, RttResponseSense):
+            other = RttResponseSense(other)
+        return self.id != other.id
+
+    def __str__(self):
+        return self.description
+
+    def __repr__(self):
+        return 'RttResponseSense(id=' + str(self.id) + ', description=' + self.description + ')'
+
+    @property
+    def description(self):
+        return RttResponseSense.description_from_id(self._sense_id)
+
+    @property
+    def id(self):
+        return self._sense_id
+
+    @staticmethod
+    def id_from_description(sense_description):
+        """
+        Get the numeric equivalent of an rtt-response-sense represented as a string
+        :param sense_description: The rtt-response-sense in string form
+        :return: The numeric form of the rtt-response-sense or 0 if no match was found
+        """
+        for sense_id in RttResponseSense.sense_values:
+            if sense_description == RttResponseSense.sense_values[sense_id]:
+                return sense_id
+        return 0
+
+    @staticmethod
+    def description_from_id(sense_id):
+        """
+        Get the string equivalent of a numeric rtt-response-sense
+        :param sense_id: The rtt-response-sense in numeric form as returned by an SNMP request
+        :return: A string describing the rtt-response-sense or 'Unknown' if no match was found
+        """
+        sense_id = int(sense_id)
+        description = 'unknown'
+        if sense_id in RttResponseSense.sense_values:
+            description = RttResponseSense.sense_values[sense_id]
+        return description
+
+
 class RttType:
     ECHO = 1
     PATH_ECHO = 2
@@ -1226,7 +1370,7 @@ class RttType:
     @staticmethod
     def id_from_description(rtt_type_description):
         """
-        Get the numeric equivalent of an rtt-type represented as a astring
+        Get the numeric equivalent of an rtt-type represented as a string
         :param rtt_type_description: The rtt-type in string form
         :return: The numeric form of the rtt-type or 0 if no match was found
         """
@@ -1385,7 +1529,9 @@ class Rtt:
 
     @latest_sense.setter
     def latest_sense(self, value):
-        self._latest_sense = int(value)
+        if not isinstance(value, RttResponseSense):
+            value = RttResponseSense(value)
+        self._latest_sense = value
 
 
 class RttEcho(Rtt):
@@ -1632,7 +1778,9 @@ class RttJitter(Rtt):
 
         @sense.setter
         def sense(self, value):
-            self._sense = int(value)
+            if not isinstance(value, RttResponseSense):
+                value = RttResponseSense(value)
+            self._sense = value
 
         @property
         def sense_description(self):
@@ -1837,7 +1985,9 @@ class RttHttp(Rtt):
 
         @sense.setter
         def sense(self, value):
-            self._sense = int(value)
+            if not isinstance(value, RttResponseSense):
+                value = RttResponseSense(value)
+            self._sense = value
 
         @property
         def sense_description(self):
