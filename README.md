@@ -30,6 +30,8 @@ the RTT-MIB was installed on the system.
   * Removed sla tag suffix in perf data when checking only one entry
 * v1.1.1 (2017-11-20)
   * Fixed bug regarding dict sorting when using python3 icw parameter "--entries all"
+* v1.2.0 (not yet released)
+  * Added support for rtt-type http
 
 
 ## Installation
