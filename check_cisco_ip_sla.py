@@ -354,7 +354,7 @@ class CiscoIpSlaChecker:
 
     def determine_requested_rtt_entries(self):
         if self.options.entries == 'all':
-            self.requested_entries = self.rtt_dict.keys()
+            self.requested_entries = list(self.rtt_dict.keys())
         else:
             self.requested_entries = self.options.entries.replace(' ', '').split(',')
         self.requested_entries.sort(key=int)
