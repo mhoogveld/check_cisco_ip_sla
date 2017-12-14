@@ -19,7 +19,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = 'Maarten Hoogveld'
-__version__ = '1.1.0'
+__version__ = '1.2.0'
 __email__ = 'maarten@hoogveld.org'
 __licence__ = 'GPL-3.0'
 __status__ = 'Production'
@@ -67,10 +67,10 @@ class CiscoIpSlaChecker:
         self.session = None
         self.options = None
 
-        # A dictionary containing all info obtained through SNMP
+        # A dictionary containing all info obtained through SNMP for every rtt (requested or not)
         self.rtt_dict = dict()
 
-        # A list of all RTT types requested and their use-count
+        # A list of all RTT id's requested (strings of numeric id's)
         self.requested_entries = []
 
     def run(self):
@@ -78,6 +78,7 @@ class CiscoIpSlaChecker:
         try:
             self.create_snmp_session()
             self.read_all_rtt_entry_basic_info()
+
             if 'list' == self.options.mode:
                 self.list_rtt()
             elif 'check' == self.options.mode:
@@ -907,7 +908,8 @@ class CiscoIpSlaChecker:
         col_width_tag = 0
 
         # Determine the column widths
-        for rtt in self.rtt_dict.values():
+        for rtt_id in sorted(self.rtt_dict):
+            rtt = self.rtt_dict[rtt_id]
             col_width_id = max(col_width_id, len(str(rtt.id)))
             col_width_type = max(col_width_type, len(rtt.type.description))
             if rtt.in_active_state:
@@ -916,7 +918,8 @@ class CiscoIpSlaChecker:
                 col_width_tag = max(col_width_tag, len(rtt.tag + ' (inactive)'))
 
         # for rtt_item in rtt_table:
-        for rtt in self.rtt_dict.values():
+        for rtt_id in sorted(self.rtt_dict):
+            rtt = self.rtt_dict[rtt_id]
             rtt_line = '  ' + rtt.id.rjust(col_width_id)
             rtt_line += '  ' + rtt.type.description.ljust(col_width_type)
             tag_text = str(rtt.tag)
