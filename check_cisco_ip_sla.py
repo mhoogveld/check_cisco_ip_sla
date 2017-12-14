@@ -61,13 +61,13 @@ class CiscoIpSlaChecker:
     }
 
     def __init__(self):
-        self.status = self.STATUS_OK
+        self.status = None
         self.messages = []
         self.perfdata = []
         self.session = None
         self.options = None
 
-        ### A dictionary containing all info obtained through SNMP
+        # A dictionary containing all info obtained through SNMP
         self.rtt_dict = dict()
 
         # A list of all RTT types requested and their use-count
@@ -95,6 +95,9 @@ class CiscoIpSlaChecker:
         :return:
         """
         self.print_msg(self.V_DEBUG, 'Performing checks for requested entries')
+
+        # Initialize result status as OK
+        self.add_status(self.STATUS_OK)
 
         # Sets the self.requested_entries dict
         self.determine_requested_rtt_entries()
@@ -209,9 +212,9 @@ class CiscoIpSlaChecker:
             rtt = self.rtt_dict[requested_entry]
             self.print_msg(self.V_DEBUG, 'Entry type {}'.format(rtt.type))
             if rtt.type == RttType.HTTP:
-                self.check_http_health(rtt.id)
+                self.check_http_health(rtt)
                 if self.options.perf:
-                    self.collect_perfdata_http(rtt.id)
+                    self.collect_perfdata_http(rtt)
 
     def check_jitter_entry_info(self):
         self.print_msg(self.V_DEBUG, 'Checking jitter entries')
@@ -219,9 +222,9 @@ class CiscoIpSlaChecker:
         for requested_entry in self.requested_entries:
             rtt = self.rtt_dict[requested_entry]
             if (rtt.type == RttType.JITTER) or (rtt.type == RttType.ICMP_JITTER):
-                self.check_jitter_health(requested_entry)
+                self.check_jitter_health(rtt)
                 if self.options.perf:
-                    self.collect_perfdata_jitter(requested_entry)
+                    self.collect_perfdata_jitter(rtt)
 
     def parse_options(self):
         parser = argparse.ArgumentParser(
@@ -907,21 +910,21 @@ class CiscoIpSlaChecker:
         for rtt in self.rtt_dict.values():
             col_width_id = max(col_width_id, len(str(rtt.id)))
             col_width_type = max(col_width_type, len(rtt.type.description))
-            if not rtt.active:
+            if rtt.in_active_state:
                 col_width_tag = max(col_width_tag, len(rtt.tag))
             else:
                 col_width_tag = max(col_width_tag, len(rtt.tag + ' (inactive)'))
 
         # for rtt_item in rtt_table:
-        for rtt in self.rtt_dict:
+        for rtt in self.rtt_dict.values():
             rtt_line = '  ' + rtt.id.rjust(col_width_id)
             rtt_line += '  ' + rtt.type.description.ljust(col_width_type)
             tag_text = str(rtt.tag)
-            if not rtt.active:
+            if not rtt.in_active_state:
                 tag_text += ' (inactive)'
             rtt_line += '  ' + tag_text.strip()
 
-            if rtt.active:
+            if rtt.in_active_state:
                 sla_list.append(rtt_line)
             else:
                 inactive_sla_list.append(rtt_line)
@@ -944,24 +947,20 @@ class CiscoIpSlaChecker:
             for sla in sla_list:
                 self.add_message(str(sla) + '\n')
 
-    def check_http_health(self, requested_entry):
+    def check_http_health(self, rtt):
         """
         Checks if the latest http entry check went OK by it's sense value
         Can adjust the status and messages returned by the check
-        :param requested_entry: The rtt-id in numeric form
+        :param rtt: The rtt object to check
         :return:
         """
         self.print_msg(self.V_DEBUG, 'Checking health for http entry')
 
-        rtt = self.rtt_dict[requested_entry]
         if not isinstance(rtt, RttHttp):
             raise RuntimeError('collect_perfdata_http() requested for entry which is not of type RttHttp')
 
-        if rtt.latest_http.sense == RttResponseSense.HTTP_ERROR:
-            self.add_status(self.STATUS_WARNING)
-            self.add_message('HTTP error for SLA {0}. HTTP response: {1}'.format(
-                rtt.description, rtt.latest_http.sense_description))
-        elif rtt.latest_http.sense != RttResponseSense.OK:
+        if rtt.latest_http.sense != RttResponseSense.OK:
+            rtt.failed = True
             self.add_status(self.STATUS_WARNING)
             self.add_message('Latest http operation gave {sense} for SLA {sla}. Description: {descr}'.format(
                 sense=rtt.latest_http.sense, sla=rtt.description, descr=rtt.latest_http.sense_description))
@@ -979,16 +978,15 @@ class CiscoIpSlaChecker:
         #         self.add_status(self.STATUS_WARNING)
         #         self.add_message('MOS is under warning threshold for SLA {0}'.format(rtt_id))
 
-    def collect_perfdata_http(self, requested_entry):
+    def collect_perfdata_http(self, rtt):
         """
         Collect and save perf-data for the rtt so it gets returned by this check
         Will adjust the perfdata returned by the check
-        :param requested_entry: The rtt-id in numeric form
+        :param rtt: The rtt object to check
         :return:
         """
         self.print_msg(self.V_DEBUG, 'Collecting perfdata for http entry')
 
-        rtt = self.rtt_dict.get(requested_entry)
         if not isinstance(rtt, RttHttp):
             raise RuntimeError('collect_perfdata_http() requested for entry which is not of type RttHttp')
 
@@ -1009,64 +1007,71 @@ class CiscoIpSlaChecker:
             v=rtt.latest_http.rtt
         ))
 
-    def check_jitter_health(self, requested_entry):
+    def check_jitter_health(self, rtt):
         """
         Checks if the latest jitter entry check went OK by it's sense value,
         if time is synced between the source and destination
         and checks the MOS and ICPIF thresholds if they are set.
         Can adjust the status and messages returned by the check
-        :param requested_entry: The rtt-id in numeric form
+        :param rtt: The rtt object to check
         :return:
         """
         self.print_msg(self.V_DEBUG, 'Checking health for jitter entry')
 
-        rtt = self.rtt_dict.get(requested_entry)
+        rtt = self.rtt_dict.get(rtt)
         if not isinstance(rtt, RttJitter):
             raise RuntimeError('check_jitter_health() requested for entry which is not of type RttJitter')
 
         if rtt.latest_jitter.sense != RttResponseSense.OK:
+            rtt.failed = True
             self.add_status(self.STATUS_WARNING)
             self.add_message('Latest jitter operation gave {sense} for SLA {sla} (descr: {descr})'.format(
                 sense=rtt.latest_jitter.sense, sla=rtt.description, descr=rtt.latest_jitter.sense_description))
 
         if not rtt.latest_jitter.ntp_sync:
+            rtt.failed = True
             self.add_status(self.STATUS_WARNING)
             self.add_message('NTP not synced between source and destination for SLA {0}'.format(rtt.description))
 
         # Check MOS thresholds (if set)
         if self.options.critical_mos is not None or self.options.warning_mos is not None:
             if rtt.latest_jitter.mos is None:
+                rtt.failed = True
                 self.add_status(self.STATUS_UNKNOWN)
                 self.add_message('MOS not known for SLA {0}, but threshold is set'.format(rtt.description))
             elif self.options.critical_mos is not None and rtt.latest_jitter.mos <= self.options.critical_mos:
+                rtt.failed = True
                 self.add_status(self.STATUS_CRITICAL)
                 self.add_message('MOS is under critical threshold for SLA {0}'.format(rtt.description))
             elif self.options.warning_mos is not None and rtt.latest_jitter.mos <= self.options.warning_mos:
+                rtt.failed = True
                 self.add_status(self.STATUS_WARNING)
                 self.add_message('MOS is under warning threshold for SLA {0}'.format(rtt.description))
 
         # Check ICPIF thresholds (if set)
         if self.options.critical_icpif is not None or self.options.warning_icpif is not None:
             if rtt.latest_jitter.icpif is None:
+                rtt.failed = True
                 self.add_status(self.STATUS_UNKNOWN)
                 self.add_message('ICPIF not known for SLA {0}, but threshold is set'.format(rtt.description))
             elif self.options.critical_icpif is not None and rtt.latest_jitter.icpif >= self.options.critical_icpif:
+                rtt.failed = True
                 self.add_status(self.STATUS_CRITICAL)
                 self.add_message('ICPIF is over critical threshold for SLA {0}'.format(rtt.description))
             elif self.options.warning_icpif is not None and rtt.latest_jitter.icpif >= self.options.warning_icpif:
+                rtt.failed = True
                 self.add_status(self.STATUS_WARNING)
                 self.add_message('ICPIF is over warning threshold for SLA {0}'.format(rtt.description))
 
-    def collect_perfdata_jitter(self, requested_entry):
+    def collect_perfdata_jitter(self, rtt):
         """
         Collect and save perf-data for the rtt so it gets returned by this check
         Will adjust the perfdata returned by the check
-        :param requested_entry: The rtt-id in numeric form
+        :param rtt: The rtt object to check
         :return:
         """
         self.print_msg(self.V_DEBUG, 'Collecting perfdata for jitter entry')
 
-        rtt = self.rtt_dict.get(requested_entry)
         if not isinstance(rtt, RttJitter):
             raise RuntimeError('check_jitter_health() requested for entry which is not of type RttJitter')
 
