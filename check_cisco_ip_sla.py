@@ -121,7 +121,9 @@ class CiscoIpSlaChecker:
         if self.is_rtt_type_requested(RttType.HTTP):
             self.read_rtt_http_entry_info()
             self.check_http_entry_info()
-        if self.is_rtt_type_requested(RttType.JITTER) or self.is_rtt_type_requested(RttType.ICMP_JITTER):
+        if self.is_rtt_type_requested(RttType.JITTER) \
+                or self.is_rtt_type_requested(RttType.ICMP_JITTER) \
+                or self.is_rtt_type_requested(RttType.ETHERNET_JITTER):
             self.read_rtt_jitter_entry_info()
             self.check_jitter_entry_info()
 
@@ -222,7 +224,7 @@ class CiscoIpSlaChecker:
 
         for requested_entry in self.requested_entries:
             rtt = self.rtt_dict[requested_entry]
-            if (rtt.type == RttType.JITTER) or (rtt.type == RttType.ICMP_JITTER):
+            if isinstance(rtt, RttJitter):
                 self.check_jitter_health(rtt)
                 if self.options.perf:
                     self.collect_perfdata_jitter(rtt)
@@ -686,6 +688,8 @@ class CiscoIpSlaChecker:
                 continue
 
             cur_rtt = self.rtt_dict[rtt_entry]
+            if cur_rtt.type != RttType.HTTP:
+                continue
 
             try:
                 if '1' == rtt_info_type:
@@ -743,6 +747,8 @@ class CiscoIpSlaChecker:
                 continue
 
             cur_rtt = self.rtt_dict[rtt_entry]
+            if not isinstance(cur_rtt, RttJitter):
+                continue
 
             try:
                 if '1' == rtt_info_type:
@@ -960,7 +966,7 @@ class CiscoIpSlaChecker:
         self.print_msg(self.V_DEBUG, 'Checking health for http entry')
 
         if not isinstance(rtt, RttHttp):
-            raise RuntimeError('collect_perfdata_http() requested for entry which is not of type RttHttp')
+            raise RuntimeError('check_http_health() requested for entry which is not of type RttHttp')
 
         if rtt.latest_http.sense != RttResponseSense.OK:
             rtt.failed = True
@@ -1021,7 +1027,6 @@ class CiscoIpSlaChecker:
         """
         self.print_msg(self.V_DEBUG, 'Checking health for jitter entry')
 
-        rtt = self.rtt_dict.get(rtt)
         if not isinstance(rtt, RttJitter):
             raise RuntimeError('check_jitter_health() requested for entry which is not of type RttJitter')
 
@@ -1422,9 +1427,13 @@ class Rtt:
         if not isinstance(rtt_type, RttType):
             rtt_type = RttType(rtt_type)
 
-        if rtt_type == RttType.ECHO or rtt_type == RttType.PATH_ECHO or rtt_type == RttType.UDP_ECHO:
+        if rtt_type == RttType.ECHO \
+                or rtt_type == RttType.PATH_ECHO \
+                or rtt_type == RttType.UDP_ECHO:
             return RttEcho(rtt_id, rtt_type)
-        elif rtt_type == RttType.JITTER or rtt_type == RttType.ICMP_JITTER:
+        elif rtt_type == RttType.JITTER \
+                or rtt_type == RttType.ICMP_JITTER \
+                or rtt_type == RttType.ETHERNET_JITTER:
             return RttJitter(rtt_id, rtt_type)
         elif rtt_type == RttType.HTTP:
             return RttHttp(rtt_id, rtt_type)
