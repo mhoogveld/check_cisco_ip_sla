@@ -12,6 +12,7 @@ This is just one example, however SLAs can be configured for various other tasks
 For more info on IP SLA's, see the manual for your Cisco device on IP SLA's.
 """
 
+from __future__ import division, print_function, absolute_import
 import argparse
 import math
 from decimal import *
