@@ -18,6 +18,8 @@ At the moment to following rtt-types are supported and tested:
 * http
 * jitter
 * icmpJitter (?)
+* **TODO: This list needs to be verified!!!**
+
 Other types can be implemented. Suggestions and/or help is always welcome.
 
 
