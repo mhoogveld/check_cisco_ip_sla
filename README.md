@@ -7,11 +7,18 @@ This plugin can check the status of one or more IP SLA entries on a Cisco IOS de
 IP service levels for various IP applications and services. See the Cisco website for more details on SLA entries
 and their use. One simple usage example is to monitor a multi-connection failover routing setup to monitor SLAs which
 ping the other end of each line. SLA's can be set up to monitor a line/route and when this line goes down, the
-corresponding SLA will go down which this plugin can monitor. This is just one example, however SLAs can be configured
-for various other tasks. For more info on IP SLA's, see the manual for your Cisco device on IP SLA's. An example is
+corresponding SLA will go down which this plugin can monitor. An other use case is to measure jitter which can be important,
+when using VoIP services. SLAs can be configured for various other tasks. For more info on IP SLA's, see the manual 
+for your Cisco device on IP SLA's. An example is
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
-At the moment, rtt-types echo, pathEcho and jitter are supported and tested (aka icmp-echo, path-echo and udp-jitter). 
-Other types need to be implemented or at least tested. Suggestions and/or help is always welcome.
+At the moment to following rtt-types are supported and tested:
+* echo
+* pathEcho (only for the target address)
+* udpEcho
+* http
+* jitter
+* icmpJitter (?)
+Other types can be implemented. Suggestions and/or help is always welcome.
 
 
 ## Changelist
@@ -19,19 +26,24 @@ Other types need to be implemented or at least tested. Suggestions and/or help i
   * Initial release
 * v1.0.1 (2017-02-22)
   * Fixed bug which appeared when OID's were returned in text form when 
-the RTT-MIB was installed on the system.
+    the RTT-MIB was installed on the system.
 * v1.0.2 (2017-03-12)
   * Added round trip time perf data. 
   * Added warning when checking unsupported IP SLA types.
-  * IMPORTANT backward incompatible change: Repurposed the '--version' parameter from setting the snmp-version to displaying the scripts version. 
-    To specify the snmp version, use '-v' or '--snmp-version'
+  * IMPORTANT backward incompatible change: Repurposed the '--version' parameter from setting the snmp-version 
+    to displaying the scripts version. To specify the snmp version, use '-v' or '--snmp-version'
 * v1.1.0 (2017-06-28)
   * Added support for rtt-type jitter with MOS and ICPIF thresholds and extensive perf data
   * Removed sla tag suffix in perf data when checking only one entry
 * v1.1.1 (2017-11-20)
   * Fixed bug regarding dict sorting when using python3 icw parameter "--entries all"
 * v1.2.0 (not yet released)
+  * Restructured program to ease work on later additions and modifications
   * Added support for rtt-type http
+  * Changed the meaning of the warning and critical parameters to specify rtt times in ms instead 
+    of number-of-rtt's failed. This makes much more sense as a general use case.
+    Setting the warning and critical threshold for number-of-rtt's failed
+    is still available as --warning-failed-count and it's critical variant.
 
 
 ## Installation
@@ -67,9 +79,12 @@ usage: check_cisco_ip_sla.py [-h] [--version] [-H HOSTNAME] [-v {1,2,3}]
                              [-p PASSWORD] [-a {MD5,SHA}] [-A AUTH_PASSWORD]
                              [-x {DES,AES}] [-X PRIV_PASSWORD]
                              [-m {list,check}] [-e ENTRIES] [--perf]
-                             [--critical-pct CRITICAL_PCT]
-                             [--warning-pct WARNING_PCT] [--critical CRITICAL]
-                             [--warning WARNING] [--critical-mos CRITICAL_MOS]
+                             [--critical CRITICAL] [--warning WARNING]
+                             [--critical-failed-pct CRITICAL_FAILED_PCT]
+                             [--warning-failed-pct WARNING_FAILED_PCT]
+                             [--critical-failed-count CRITICAL_FAILED_COUNT]
+                             [--warning-failed-count WARNING_FAILED_COUNT]
+                             [--critical-mos CRITICAL_MOS]
                              [--warning-mos WARNING_MOS]
                              [--critical-icpif CRITICAL_ICPIF]
                              [--warning-icpif WARNING_ICPIF]
@@ -86,52 +101,62 @@ optional arguments:
   -H HOSTNAME, --hostname HOSTNAME
                         Hostname or ip-address
   -v {1,2,3}, --snmp-version {1,2,3}
-                        SNMP version (default '2')
+                        SNMP version (default "2"")
   -c COMMUNITY, --community COMMUNITY
-                        SNMP v1/v2 Community string (default 'public')
+                        SNMP v1/v2 Community string (default "public")
   -u SECURITY_NAME, --security-name SECURITY_NAME
                         SNMP v3 security name (username)
   -l {noAuthNoPriv,authNoPriv,authPriv}, --security-level {noAuthNoPriv,authNoPriv,authPriv}
-                        SNMP v3 security level (default 'authPriv')
+                        SNMP v3 security level (default "authPriv")
   -p PASSWORD, --password PASSWORD
                         SNMP v3 password (used for both authentication and
                         privacy)
   -a {MD5,SHA}, --auth-protocol {MD5,SHA}
-                        SNMP v3 authentication protocol (default 'SHA')
+                        SNMP v3 authentication protocol (default "SHA")
   -A AUTH_PASSWORD, --auth-password AUTH_PASSWORD
                         SNMP v3 authentication password, overrides --password
                         if set
   -x {DES,AES}, --priv-protocol {DES,AES}
-                        SNMP v3 privacy protocol (default 'AES')
+                        SNMP v3 privacy protocol (default "AES")
   -X PRIV_PASSWORD, --priv-password PRIV_PASSWORD
                         SNMP v3 privacy password, overrides --password if set
   -m {list,check}, --mode {list,check}
                         Operation mode
   -e ENTRIES, --entries ENTRIES
                         SLA entry (or entries) to check, specify a single
-                        value, a comma-separated list or 'all' to check all
+                        value, a comma-separated list or "all" to check all
                         entries available. All entries must be of the same
-                        type. (default 'all')
+                        type. (default "all")
   --perf                Return performance data (failed percentage, round-trip
                         times)
-  --critical-pct CRITICAL_PCT
+  --critical CRITICAL   Critical threshold for the RTT value of the SLA in ms
+  --warning WARNING     Warning threshold for the RTT value of the SLA in ms
+  --critical-failed-pct CRITICAL_FAILED_PCT
                         Critical threshold in percentage of failed SLAs
-                        (default '100')
-  --warning-pct WARNING_PCT
+                        (default "100")
+  --warning-failed-pct WARNING_FAILED_PCT
                         Warning threshold in percentage of failed SLAs
-                        (default '50')
-  --critical CRITICAL   Critical threshold in amount of failed SLAs
-  --warning WARNING     Warning threshold in amount of failed SLAs
+                        (default "50")
+  --critical-failed-count CRITICAL_FAILED_COUNT
+                        Critical threshold in amount of failed SLAs
+  --warning-failed-count WARNING_FAILED_COUNT
+                        Warning threshold in amount of failed SLAs
   --critical-mos CRITICAL_MOS
-                        Critical threshold for the MOS value of jitter SLAs
-                        (1.00 .. 5.00)
+                        Critical threshold for the MOS value of jitter SLAs.
+                        MOS is a value between 1.00 (poor) and 5.00
+                        (excellent)
   --warning-mos WARNING_MOS
-                        Warning threshold for the MOS value of jitter SLAs
-                        (1.00 .. 5.00)
+                        Warning threshold for the MOS value of jitter SLAs.
+                        MOS is a value between 1.00 (poor) and 5.00
+                        (excellent)
   --critical-icpif CRITICAL_ICPIF
-                        Critical threshold for the ICPIF value of jitter SLAs
+                        Critical threshold for the ICPIF value of jitter SLAs.
+                        ICPIF is typically between 5 and 50 where 20 is
+                        generally considered "adequate."
   --warning-icpif WARNING_ICPIF
-                        Warning threshold for the ICPIF value of jitter SLAs
+                        Warning threshold for the ICPIF value of jitter SLAs.
+                        ICPIF is typically between 5 and 50 where 20 is
+                        generally considered "adequate."
   --verbose {0,1,2}     Verbose output
 
 ```
@@ -153,7 +178,7 @@ For all SLA types the Round Trip Time of the latest operation is returned:
 * 'rtt': The RTT of the latest operation
 
 or when checking multiple SLA entries at once:
-* 'rtt <entry-tag>': The RTT of the latest operation for each entry (e.g. 'rtt 10')
+* 'rtt_<entry-tag>': The RTT of the latest operation for each entry (e.g. 'rtt_10')
 
 For jitter-SLA's the following additional values are returned:
 * 'RTT avg': The average, min and max of the successfully measured RTT's (example 'RTT avg'=12.2ms;9;24)
@@ -188,6 +213,7 @@ SLAs available:
     20  echo    Tokio
     30  echo    Amsterdam
     40  echo    London
+   340  http    Http to static gif
   2600  jitter  Jitter from Site-X to Site-Y
 ```
 
@@ -222,7 +248,14 @@ Check with performance data
 ```
 $ ./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --perf
 
-OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rtt 10'=1ms 'rtt 20'=4ms 'rtt 30'=1ms 'rtt 40'=12ms
+OK - 4 OK | 'Failed%'=0.0%;50;100;0;100 'rtt_10'=1ms 'rtt_20'=4ms 'rtt_30'=1ms 'rtt_40'=12ms
+```
+
+Check http with performance data
+```
+./check_cisco_ip_sla.py --hostname 192.168.0.1 -v 2 -c public --mode check --entries 340 --perf
+
+OK | 'DNS rtt'=0ms 'TCP connect rtt'=12ms 'Transaction rtt'=16ms 'Total rtt'=28ms
 ```
 
 Check jitter with performance data

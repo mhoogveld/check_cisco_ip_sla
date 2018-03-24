@@ -25,7 +25,7 @@ __author__ = 'Maarten Hoogveld'
 __version__ = '1.2.0'
 __email__ = 'maarten@hoogveld.org'
 __licence__ = 'GPL-3.0'
-__status__ = 'Production'
+__status__ = 'Testing'
 
 
 class CiscoIpSlaChecker(object):
@@ -74,10 +74,6 @@ class CiscoIpSlaChecker(object):
     def run(self):
         self.parse_options()
 
-        # Sets the self.requested_entries dict
-        if 'check' == self.options.mode:
-            self.determine_requested_rtt_entries()
-
         try:
             self.create_snmp_session()
             self.read_all_rtt_entry_basic_info()
@@ -85,6 +81,7 @@ class CiscoIpSlaChecker(object):
             if 'list' == self.options.mode:
                 self.list_rtt()
             elif 'check' == self.options.mode:
+                self.determine_requested_rtt_entries()
                 self.check()
         except EasySNMPError as e:
             self.status.add(NagiosStatus.UNKNOWN)
@@ -147,9 +144,9 @@ class CiscoIpSlaChecker(object):
         parser.add_argument('--perf',
                             action='store_true', help='Return performance data (failed percentage, round-trip times)')
         parser.add_argument('--critical',
-                            default=None, type=int, help='Critical threshold in amount of failed SLAs')
+                            default=None, type=int, help='Critical threshold for the RTT value of the SLA in ms')
         parser.add_argument('--warning',
-                            default=None, type=int, help='Warning threshold in amount of failed SLAs')
+                            default=None, type=int, help='Warning threshold for the RTT value of the SLA in ms')
         parser.add_argument('--critical-failed-pct',
                             default=None, type=float,
                             help='Critical threshold in percentage of failed SLAs (default "100")')
@@ -162,14 +159,20 @@ class CiscoIpSlaChecker(object):
                             default=None, type=int, help='Warning threshold in amount of failed SLAs')
         parser.add_argument('--critical-mos',
                             default=None, type=Decimal,
-                            help='Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)')
+                            help='Critical threshold for the MOS value of jitter SLAs. MOS is a value '
+                                 'between 1.00 (poor) and 5.00 (excellent)')
         parser.add_argument('--warning-mos',
                             default=None, type=Decimal,
-                            help='Warning threshold for the MOS value of jitter SLAs (1.00 .. 5.00)')
+                            help='Warning threshold for the MOS value of jitter SLAs. MOS is a value '
+                                 'between 1.00 (poor) and 5.00 (excellent)')
         parser.add_argument('--critical-icpif',
-                            default=None, type=int, help='Critical threshold for the ICPIF value of jitter SLAs')
+                            default=None, type=int,
+                            help='Critical threshold for the ICPIF value of jitter SLAs. ICPIF is typically '
+                                 'between 5 and 50 where 20 is generally considered "adequate."')
         parser.add_argument('--warning-icpif',
-                            default=None, type=int, help='Warning threshold for the ICPIF value of jitter SLAs')
+                            default=None, type=int,
+                            help='Warning threshold for the ICPIF value of jitter SLAs. ICPIF is typically '
+                                 'between 5 and 50 where 20 is generally considered "adequate."')
         parser.add_argument('--verbose',
                             default=0, type=int, choices=[0, 1, 2], help='Verbose output')
 
@@ -249,12 +252,12 @@ class CiscoIpSlaChecker(object):
                 return False
         if self.options.critical_failed_count is not None and self.options.warning_failed_count is not None:
             if self.options.critical_failed_count <= self.options.warning_failed_count:
-                print('The critical threshold value must be larger than the warning threshold '
+                print('The critical threshold value must be larger than or equal to the warning threshold '
                       'for the number of failed SLAs.')
                 return False
         if self.options.critical_mos is not None and self.options.warning_mos is not None:
-            if self.options.critical_mos <= self.options.warning_mos:
-                print('The critical threshold value must be larger than the warning threshold '
+            if self.options.critical_mos >= self.options.warning_mos:
+                print('The critical threshold value must be smaller than or equal to the warning threshold '
                       'for the MOS value.')
                 return False
         if self.options.critical_mos is not None and (self.options.critical_mos < 1 or self.options.critical_mos > 5):
@@ -265,7 +268,7 @@ class CiscoIpSlaChecker(object):
             return False
         if self.options.critical_icpif is not None and self.options.warning_icpif is not None:
             if self.options.critical_icpif <= self.options.warning_icpif:
-                print('The critical threshold value must be larger than the warning threshold '
+                print('The critical threshold value must be larger than or equal to the warning threshold '
                       'for the ICPIF value.')
                 return False
         return True
@@ -386,6 +389,12 @@ class CiscoIpSlaChecker(object):
             self.requested_entries = self.options.entries.replace(' ', '').split(',')
         self.requested_entries.sort(key=int)
 
+        # If there's more than one entry requested, create rtt labels in perf data
+        # with the entry number in it so they can be kept apart
+        if len(self.requested_entries) > 1:
+            for rtt_entry in self.rtt_dict:
+                self.rtt_dict[rtt_entry].id_in_perf_label = True
+
         logging.getLogger().debug('Requested entries: ' + ", ".join(self.requested_entries))
 
     def validate_requested_rtt_entries_types(self):
@@ -462,8 +471,12 @@ class CiscoIpSlaChecker(object):
         supported_rtt_types = [
             RttType.ECHO,
             RttType.PATH_ECHO,
+            RttType.UDP_ECHO,
             RttType.JITTER,
+            RttType.ICMP_JITTER,
+            RttType.ETHERNET_JITTER,
             RttType.HTTP,
+            RttType.ETHERNET_PING,
         ]
         if not isinstance(rtt_type, RttType):
             rtt_type = RttType(rtt_type)
@@ -484,7 +497,7 @@ class CiscoIpSlaChecker(object):
         col_width_tag = 0
 
         # Determine the column widths
-        for rtt_id in sorted(self.rtt_dict):
+        for rtt_id in sorted(self.rtt_dict, key=int):
             rtt = self.rtt_dict[rtt_id]
             col_width_id = max(col_width_id, len(str(rtt.id)))
             col_width_type = max(col_width_type, len(rtt.type.description))
@@ -494,7 +507,7 @@ class CiscoIpSlaChecker(object):
                 col_width_tag = max(col_width_tag, len(rtt.tag + ' (inactive)'))
 
         # for rtt_item in rtt_table:
-        for rtt_id in sorted(self.rtt_dict):
+        for rtt_id in sorted(self.rtt_dict, key=int):
             rtt = self.rtt_dict[rtt_id]
             rtt_line = '  ' + rtt.id.rjust(col_width_id)
             rtt_line += '  ' + rtt.type.description.ljust(col_width_type)
@@ -542,10 +555,11 @@ class CiscoIpSlaChecker(object):
 
         # Collect the status, messages and perf-data of all rtt's
         for entry in self.requested_entries:
-            rtt = self.rtt_dict[entry]
-            self.status.add(rtt.status)
-            combined_msgs.append(rtt.get_messages())
-            combined_perf.append(rtt.get_perfdata())
+            if entry in self.rtt_dict:
+                rtt = self.rtt_dict[entry]
+                self.status.add(rtt.status)
+                combined_msgs.append(rtt.get_messages())
+                combined_perf.append(rtt.get_perfdata())
 
         # Remove empty-string items
         combined_msgs = list(filter(None, combined_msgs))
@@ -620,6 +634,19 @@ class CiscoIpSlaChecker(object):
             use_numeric=True,
         )
 
+    def walk(self, oids):
+        """
+        Perform an SNMP walk, but set the log level to INFO if the current level was more verbose.
+        This prevents easysnmp's walk() to emit a lot of log messages
+        """
+        logger = logging.getLogger()
+        orig_level = logger.getEffectiveLevel()
+        if orig_level < logging.INFO:
+            logger.setLevel(logging.INFO)
+        result = self.session.walk(oids)
+        logger.setLevel(orig_level)
+        return result
+
     def read_all_rtt_entry_basic_info(self):
         """ Reads all info on all RTT entries and stores found data in self.rtt_dict """
         logging.getLogger().debug('Reading basic rtt info for all entries')
@@ -631,7 +658,7 @@ class CiscoIpSlaChecker(object):
         logger = logging.getLogger()
 
         logger.debug('Starting SNMP-walk for rttMonCtrlAdminTable (.1.3.6.1.4.1.9.9.42.1.2.1.1)')
-        rtt_ctrl_admin_entries = self.session.walk('.1.3.6.1.4.1.9.9.42.1.2.1.1')
+        rtt_ctrl_admin_entries = self.walk('.1.3.6.1.4.1.9.9.42.1.2.1.1')
 
         # Create an Rtt class in the rtt_dict of the correct type for each entry
         for item in rtt_ctrl_admin_entries:
@@ -643,8 +670,6 @@ class CiscoIpSlaChecker(object):
                 # rttMonCtrlAdminRttType (4)
                 try:
                     self.rtt_dict[rtt_entry] = Rtt.rtt_factory(rtt_entry, item.value)
-                    if len(self.requested_entries) > 1:
-                        self.rtt_dict[rtt_entry].id_in_perf_label = True
                 except ValueError:
                     logger.debug('Skipping unsupported rtt-type {}'.format(item.value))
 
@@ -688,7 +713,7 @@ class CiscoIpSlaChecker(object):
         logger = logging.getLogger()
 
         logger.debug('Starting SNMP-walk for rttMonCtrlOperTable (.1.3.6.1.4.1.9.9.42.1.2.9.1)')
-        rtt_ctrl_oper_entries = self.session.walk('.1.3.6.1.4.1.9.9.42.1.2.9.1')
+        rtt_ctrl_oper_entries = self.walk('.1.3.6.1.4.1.9.9.42.1.2.9.1')
 
         for item in rtt_ctrl_oper_entries:
             oid_parts = str(item.oid).split('.')
@@ -735,7 +760,7 @@ class CiscoIpSlaChecker(object):
         logger = logging.getLogger()
 
         logger.debug('Starting SNMP-walk for rttMonLatestRttOperTable (.1.3.6.1.4.1.9.9.42.1.2.10.1)')
-        latest_rtt_oper_entries = self.session.walk('.1.3.6.1.4.1.9.9.42.1.2.10.1')
+        latest_rtt_oper_entries = self.walk('.1.3.6.1.4.1.9.9.42.1.2.10.1')
 
         for item in latest_rtt_oper_entries:
             oid_parts = str(item.oid).split('.')
@@ -772,7 +797,7 @@ class CiscoIpSlaChecker(object):
 
         # Get Http specific data (See '-- LatestHttpOper Table' in MIB)
         logger.debug('Starting SNMP-walk for rttMonLatestHttpOperTable (.1.3.6.1.4.1.9.9.42.1.5.1.1)')
-        latest_http_oper_entries = self.session.walk('.1.3.6.1.4.1.9.9.42.1.5.1.1')
+        latest_http_oper_entries = self.walk('.1.3.6.1.4.1.9.9.42.1.5.1.1')
 
         for item in latest_http_oper_entries:
             oid_parts = str(item.oid).split('.')
@@ -790,23 +815,23 @@ class CiscoIpSlaChecker(object):
             try:
                 if '1' == rtt_info_type:
                     # rttMonLatestHTTPOperRTT (1)
-                    cur_rtt.latest_http.rtt = Decimal(item.value)
+                    cur_rtt.latest_http.rtt = item.value
 
                 if '2' == rtt_info_type:
                     # rttMonLatestHTTPOperDNSRTT (2)
-                    cur_rtt.latest_http.rtt_dns = Decimal(item.value)
+                    cur_rtt.latest_http.rtt_dns = item.value
 
                 if '3' == rtt_info_type:
                     # rttMonLatestHTTPOperTCPConnectRTT (3)
-                    cur_rtt.latest_http.rtt_tcp_connect = Decimal(item.value)
+                    cur_rtt.latest_http.rtt_tcp_connect = item.value
 
                 if '4' == rtt_info_type:
                     # rttMonLatestHTTPOperTransactionRTT (4)
-                    cur_rtt.latest_http.rtt_trans = Decimal(item.value)
+                    cur_rtt.latest_http.rtt_trans = item.value
 
                 if '5' == rtt_info_type:
                     # rttMonLatestHTTPOperMessageBodyOctets (5)
-                    cur_rtt.latest_http.body_octets = Decimal(item.value)
+                    cur_rtt.latest_http.body_octets = item.value
 
                 if '6' == rtt_info_type:
                     # rttMonLatestHTTPOperSense (6)
@@ -830,7 +855,7 @@ class CiscoIpSlaChecker(object):
 
         # Get Jitter specific data (See '-- LatestJitterOper Table' in MIB)
         logger.debug('Starting SNMP-walk for rttMonLatestJitterOperTable (.1.3.6.1.4.1.9.9.42.1.5.2.1)')
-        latest_jitter_oper_entries = self.session.walk('.1.3.6.1.4.1.9.9.42.1.5.2.1')
+        latest_jitter_oper_entries = self.walk('.1.3.6.1.4.1.9.9.42.1.5.2.1')
 
         for item in latest_jitter_oper_entries:
             oid_parts = str(item.oid).split('.')
@@ -1604,6 +1629,7 @@ class RttEcho(Rtt):
         """
         logger = logging.getLogger()
         logger.debug('Checking health for echo entry {}'.format(self.id))
+        logger.debug(str(self))
 
         Rtt.check_basic_health(self)
 
@@ -1694,7 +1720,7 @@ class RttJitter(Rtt):
 
         # Check MOS thresholds (if set)
         if self.critical_mos is not None or self.warning_mos is not None:
-            if self.latest_jitter.mos is None:
+            if self.latest_jitter.mos is None or self.latest_jitter.mos == 0:
                 self.status.add(NagiosStatus.UNKNOWN)
                 self.add_message('MOS not known for SLA {0}, but threshold is set'.format(self.description))
             elif self.critical_mos is not None and self.latest_jitter.mos <= self.critical_mos:
@@ -1804,7 +1830,7 @@ class RttJitter(Rtt):
                 v=self.latest_jitter.num_over_threshold
             ))
 
-    class LatestJitter:
+    class LatestJitter(object):
         def __init__(self):
             self._num_of_rtt = None
             self._rtt_sum = None
@@ -1848,7 +1874,7 @@ class RttJitter(Rtt):
 
         @num_of_rtt.setter
         def num_of_rtt(self, value):
-            self._num_of_rtt = Decimal(value)
+            self._num_of_rtt = int(value)
 
         @property
         def rtt_sum(self):
@@ -1862,7 +1888,7 @@ class RttJitter(Rtt):
 
         @rtt_sum.setter
         def rtt_sum(self, value):
-            self._rtt_sum = Decimal(value)
+            self._rtt_sum = int(value)
 
         @property
         def rtt_sum2(self):
@@ -1876,7 +1902,7 @@ class RttJitter(Rtt):
 
         @rtt_sum2.setter
         def rtt_sum2(self, value):
-            self._rtt_sum2 = Decimal(value)
+            self._rtt_sum2 = int(value)
 
         @property
         def rtt_min(self):
@@ -1884,7 +1910,7 @@ class RttJitter(Rtt):
 
         @rtt_min.setter
         def rtt_min(self, value):
-            self._rtt_min = Decimal(value)
+            self._rtt_min = int(value)
 
         @property
         def rtt_max(self):
@@ -1892,7 +1918,7 @@ class RttJitter(Rtt):
 
         @rtt_max.setter
         def rtt_max(self, value):
-            self._rtt_max = Decimal(value)
+            self._rtt_max = int(value)
 
         @property
         def min_of_positives_sd(self):
@@ -1900,7 +1926,7 @@ class RttJitter(Rtt):
 
         @min_of_positives_sd.setter
         def min_of_positives_sd(self, value):
-            self._min_of_positives_sd = Decimal(value)
+            self._min_of_positives_sd = int(value)
 
         @property
         def max_of_positives_sd(self):
@@ -1908,7 +1934,7 @@ class RttJitter(Rtt):
 
         @max_of_positives_sd.setter
         def max_of_positives_sd(self, value):
-            self._max_of_positives_sd = Decimal(value)
+            self._max_of_positives_sd = int(value)
 
         @property
         def num_of_positives_sd(self):
@@ -1916,7 +1942,7 @@ class RttJitter(Rtt):
 
         @num_of_positives_sd.setter
         def num_of_positives_sd(self, value):
-            self._num_of_positives_sd = Decimal(value)
+            self._num_of_positives_sd = int(value)
 
         @property
         def min_of_negatives_sd(self):
@@ -1924,7 +1950,7 @@ class RttJitter(Rtt):
 
         @min_of_negatives_sd.setter
         def min_of_negatives_sd(self, value):
-            self._min_of_negatives_sd = Decimal(value)
+            self._min_of_negatives_sd = int(value)
 
         @property
         def max_of_negatives_sd(self):
@@ -1932,7 +1958,7 @@ class RttJitter(Rtt):
 
         @max_of_negatives_sd.setter
         def max_of_negatives_sd(self, value):
-            self._max_of_negatives_sd = Decimal(value)
+            self._max_of_negatives_sd = int(value)
 
         @property
         def num_of_negatives_sd(self):
@@ -1940,7 +1966,7 @@ class RttJitter(Rtt):
 
         @num_of_negatives_sd.setter
         def num_of_negatives_sd(self, value):
-            self._num_of_negatives_sd = Decimal(value)
+            self._num_of_negatives_sd = int(value)
 
         @property
         def min_of_positives_ds(self):
@@ -1948,7 +1974,7 @@ class RttJitter(Rtt):
 
         @min_of_positives_ds.setter
         def min_of_positives_ds(self, value):
-            self._min_of_positives_ds = Decimal(value)
+            self._min_of_positives_ds = int(value)
 
         @property
         def max_of_positives_ds(self):
@@ -1956,7 +1982,7 @@ class RttJitter(Rtt):
 
         @max_of_positives_ds.setter
         def max_of_positives_ds(self, value):
-            self._max_of_positives_ds = Decimal(value)
+            self._max_of_positives_ds = int(value)
 
         @property
         def num_of_positives_ds(self):
@@ -1964,7 +1990,7 @@ class RttJitter(Rtt):
 
         @num_of_positives_ds.setter
         def num_of_positives_ds(self, value):
-            self._num_of_positives_ds = Decimal(value)
+            self._num_of_positives_ds = int(value)
 
         @property
         def min_of_negatives_ds(self):
@@ -1972,7 +1998,7 @@ class RttJitter(Rtt):
 
         @min_of_negatives_ds.setter
         def min_of_negatives_ds(self, value):
-            self._min_of_negatives_ds = Decimal(value)
+            self._min_of_negatives_ds = int(value)
 
         @property
         def max_of_negatives_ds(self):
@@ -1980,7 +2006,7 @@ class RttJitter(Rtt):
 
         @max_of_negatives_ds.setter
         def max_of_negatives_ds(self, value):
-            self._max_of_negatives_ds = Decimal(value)
+            self._max_of_negatives_ds = int(value)
 
         @property
         def num_of_negatives_ds(self):
@@ -1988,7 +2014,7 @@ class RttJitter(Rtt):
 
         @num_of_negatives_ds.setter
         def num_of_negatives_ds(self, value):
-            self._num_of_negatives_ds = Decimal(value)
+            self._num_of_negatives_ds = int(value)
 
         @property
         def packet_loss_sd(self):
@@ -1996,7 +2022,7 @@ class RttJitter(Rtt):
 
         @packet_loss_sd.setter
         def packet_loss_sd(self, value):
-            self._packet_loss_sd = Decimal(value)
+            self._packet_loss_sd = int(value)
 
         @property
         def packet_loss_ds(self):
@@ -2004,7 +2030,7 @@ class RttJitter(Rtt):
 
         @packet_loss_ds.setter
         def packet_loss_ds(self, value):
-            self._packet_loss_ds = Decimal(value)
+            self._packet_loss_ds = int(value)
 
         @property
         def packet_out_of_seq(self):
@@ -2012,7 +2038,7 @@ class RttJitter(Rtt):
 
         @packet_out_of_seq.setter
         def packet_out_of_seq(self, value):
-            self._packet_out_of_seq = Decimal(value)
+            self._packet_out_of_seq = int(value)
 
         @property
         def packet_mia(self):
@@ -2020,7 +2046,7 @@ class RttJitter(Rtt):
 
         @packet_mia.setter
         def packet_mia(self, value):
-            self._packet_mia = Decimal(value)
+            self._packet_mia = int(value)
 
         @property
         def packet_late_arrival(self):
@@ -2028,7 +2054,7 @@ class RttJitter(Rtt):
 
         @packet_late_arrival.setter
         def packet_late_arrival(self, value):
-            self._packet_late_arrival = Decimal(value)
+            self._packet_late_arrival = int(value)
 
         @property
         def sense(self):
@@ -2050,6 +2076,7 @@ class RttJitter(Rtt):
 
         @property
         def mos(self):
+            """The MOS value, 1 (poor quality) to 5 (excellent quality)"""
             return self._mos
 
         @mos.setter
@@ -2061,6 +2088,7 @@ class RttJitter(Rtt):
 
         @property
         def icpif(self):
+            """The ICPIF value, typically from 5 (very low impairment) to 55 (very high impairment)"""
             return self._icpif
 
         @icpif.setter
@@ -2073,7 +2101,7 @@ class RttJitter(Rtt):
 
         @avg_jitter.setter
         def avg_jitter(self, value):
-            self._avg_jitter = Decimal(value)
+            self._avg_jitter = int(value)
 
         @property
         def avg_jitter_sd(self):
@@ -2081,7 +2109,7 @@ class RttJitter(Rtt):
 
         @avg_jitter_sd.setter
         def avg_jitter_sd(self, value):
-            self._avg_jitter_sd = Decimal(value)
+            self._avg_jitter_sd = int(value)
 
         @property
         def avg_jitter_ds(self):
@@ -2089,7 +2117,7 @@ class RttJitter(Rtt):
 
         @avg_jitter_ds.setter
         def avg_jitter_ds(self, value):
-            self._avg_jitter_ds = Decimal(value)
+            self._avg_jitter_ds = int(value)
 
         @property
         def avg_latency_sd(self):
@@ -2097,7 +2125,7 @@ class RttJitter(Rtt):
 
         @avg_latency_sd.setter
         def avg_latency_sd(self, value):
-            self._avg_latency_sd = Decimal(value)
+            self._avg_latency_sd = int(value)
 
         @property
         def avg_latency_ds(self):
@@ -2105,7 +2133,7 @@ class RttJitter(Rtt):
 
         @avg_latency_ds.setter
         def avg_latency_ds(self, value):
-            self._avg_latency_ds = Decimal(value)
+            self._avg_latency_ds = int(value)
 
         @property
         def ntp_sync(self):
@@ -2121,7 +2149,7 @@ class RttJitter(Rtt):
 
         @rtt_sum_high.setter
         def rtt_sum_high(self, value):
-            self._rtt_sum_high = Decimal(value)
+            self._rtt_sum_high = int(value)
 
         @property
         def rtt_sum2_high(self):
@@ -2129,7 +2157,7 @@ class RttJitter(Rtt):
 
         @rtt_sum2_high.setter
         def rtt_sum2_high(self, value):
-            self._rtt_sum2_high = Decimal(value)
+            self._rtt_sum2_high = int(value)
 
         @property
         def num_over_threshold(self):
@@ -2137,7 +2165,7 @@ class RttJitter(Rtt):
 
         @num_over_threshold.setter
         def num_over_threshold(self, value):
-            self._num_over_threshold = Decimal(value)
+            self._num_over_threshold = int(value)
 
         def __repr__(self):
             repr_str = 'LatestJitter('
@@ -2252,7 +2280,7 @@ class RttHttp(Rtt):
             thresholds=thresholds
         ))
 
-    class LatestHttp:
+    class LatestHttp(object):
         def __init__(self):
             self._rtt = None
             self._rtt_dns = None
@@ -2269,7 +2297,7 @@ class RttHttp(Rtt):
 
         @rtt.setter
         def rtt(self, value):
-            self._rtt = Decimal(value)
+            self._rtt = int(value)
 
         @property
         def rtt_dns(self):
@@ -2277,7 +2305,7 @@ class RttHttp(Rtt):
 
         @rtt_dns.setter
         def rtt_dns(self, value):
-            self._rtt_dns = Decimal(value)
+            self._rtt_dns = int(value)
 
         @property
         def rtt_tcp_connect(self):
@@ -2285,7 +2313,7 @@ class RttHttp(Rtt):
 
         @rtt_tcp_connect.setter
         def rtt_tcp_connect(self, value):
-            self._rtt_tcp_connect = Decimal(value)
+            self._rtt_tcp_connect = int(value)
 
         @property
         def rtt_trans(self):
@@ -2293,7 +2321,7 @@ class RttHttp(Rtt):
 
         @rtt_trans.setter
         def rtt_trans(self, value):
-            self._rtt_trans = Decimal(value)
+            self._rtt_trans = int(value)
 
         @property
         def body_octets(self):
@@ -2301,7 +2329,7 @@ class RttHttp(Rtt):
 
         @body_octets.setter
         def body_octets(self, value):
-            self._body_octets = Decimal(value)
+            self._body_octets = int(value)
 
         @property
         def sense(self):
