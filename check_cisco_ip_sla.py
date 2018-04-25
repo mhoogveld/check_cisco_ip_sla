@@ -78,16 +78,16 @@ class CiscoIpSlaChecker(object):
             self.create_snmp_session()
             self.read_all_rtt_entry_basic_info()
 
-            if 'list' == self.options.mode:
+            if self.options.mode == 'list':
                 self.list_rtt()
-            elif 'check' == self.options.mode:
-                self.determine_requested_rtt_entries()
-                self.check()
+            elif self.options.mode == 'check':
+                if self.determine_requested_rtt_entries():
+                    self.check()
         except EasySNMPError as e:
             self.status.add(NagiosStatus.UNKNOWN)
             self.set_message('SNMP error checking {}, {}'.format(self.options.hostname, e))
 
-        self.print_output()
+        self.print_output(self.options.mode == 'check')
         return
 
     @staticmethod
@@ -387,6 +387,13 @@ class CiscoIpSlaChecker(object):
             self.requested_entries = list(self.rtt_dict.keys())
         else:
             self.requested_entries = self.options.entries.replace(' ', '').split(',')
+
+        for entry in self.requested_entries:
+            if entry not in self.rtt_dict:
+                self.add_message('SLA "{0}" does not exist'.format(entry))
+                self.status.add(NagiosStatus.UNKNOWN)
+                return False
+
         self.requested_entries.sort(key=int)
 
         # If there's more than one entry requested, create rtt labels in perf data
@@ -396,6 +403,8 @@ class CiscoIpSlaChecker(object):
                 self.rtt_dict[rtt_entry].id_in_perf_label = True
 
         logging.getLogger().debug('Requested entries: ' + ", ".join(self.requested_entries))
+
+        return True
 
     def validate_requested_rtt_entries_types(self):
         """
@@ -539,9 +548,11 @@ class CiscoIpSlaChecker(object):
             for sla in sla_list:
                 self.add_message(str(sla) + '\n')
 
-    def print_output(self):
+    def print_output(self, nagios_plugin_format=True):
         """
         Prints the final output (in Nagios plugin format if self.status is set)
+        :param nagios_plugin_format: If True, the output will be in Nagios plugin format, including status
+                                     and performance data, if applicable.
         :return:
         """
         logging.getLogger().debug('Printing final output')
@@ -565,17 +576,23 @@ class CiscoIpSlaChecker(object):
         combined_msgs = list(filter(None, combined_msgs))
         combined_perf = list(filter(None, combined_perf))
 
-        # Build the output string
-        output = str(self.status)
-        if len(combined_msgs):
-            output += ' - '
-            # Join messages like sentences. Correct those messages which already ended with a period or a newline.
-            output += '. '.join(combined_msgs).replace('.. ', '. ').replace('\n. ', '\n')
+        # Join messages like sentences. Correct those messages which already ended with a period or a newline.
+        combined_msgs = '. '.join(combined_msgs).replace('.. ', '. ').replace('\n. ', '\n')
+        # Join perf data into one string
+        combined_perf = ' '.join(combined_perf)
 
-        if self.options.perf and len(combined_perf):
-            if len(output):
-                output += ' | '
-            output += ' '.join(combined_perf)
+        # Build the output string
+        if nagios_plugin_format:
+            # Print the resulting status, the messages and the perf data
+            output = str(self.status)
+            if len(combined_msgs):
+                output += ' - ' + combined_msgs
+            if self.options.perf and len(combined_perf):
+                output += ' | ' + combined_perf
+        else:
+            # Just print the messages (eg in case of listing the available SLA's)
+            if len(combined_msgs):
+                output = combined_msgs
 
         print(output)
 

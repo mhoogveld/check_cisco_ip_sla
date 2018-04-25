@@ -13,12 +13,14 @@ for your Cisco device on IP SLA's. An example is
 [the manual for a Cisco 4500 series](http://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst4500/12-2/44sg/configuration/guide/Wrapper-44SG/swipsla.html)
 At the moment to following rtt-types are supported and tested:
 * echo
-* pathEcho (only for the target address)
-* udpEcho
+* pathEcho (only for the rtt to the target address)
+* udpEcho (only for the rtt to the target address)
 * http
 * jitter
+* voip (?)
 * icmpJitter (?)
-* **TODO: This list needs to be verified!!!**
+* ethernetJitter (?)
+Entries with a (?) are not yet fully tested.
 
 Other types can be implemented. Suggestions and/or help is always welcome.
 
@@ -176,13 +178,18 @@ Examples can be seen below.
 
 Use the --perf parameter to make the script output performance data.
 
-For all SLA types the Round Trip Time of the latest operation is returned:
+For echo SLA types the Round Trip Time of the latest operation is returned:
 * 'rtt': The RTT of the latest operation
 
-or when checking multiple SLA entries at once:
-* 'rtt_<entry-tag>': The RTT of the latest operation for each entry (e.g. 'rtt_10')
+For http-SLA's the following additional values are returned:
+* 'DNS rtt': The time spent to perform DNS query within the HTTP operation.
+             If an IP Address is specified in the URL, then DNS rtt is 0.
+* 'TCP connect rtt': The time spent to connect to the HTTP server
+* 'Transaction rtt': The time spent to download the object specified by the URL
+
 
 For jitter-SLA's the following additional values are returned:
+* 'rtt': The RTT of the latest operation
 * 'RTT avg': The average, min and max of the successfully measured RTT's (example 'RTT avg'=12.2ms;9;24)
 * 'RTT variance': The variance of measured RTT's (example: 'RTT variance'=571.4)
 * 'RTT std dev': The standard deviation of measured RTT's (example: 'RTT std dev'=23.9)
@@ -198,6 +205,9 @@ For jitter-SLA's the following additional values are returned:
 * 'Packet out of seq': The number of packets arrived out of sequence (example: 'Packet out of seq'=0)
 * 'Packet MIA': The number of packets that are lost for which the direction cannot be determined (example: 'Packet MIA'=0)
 * 'Packet late arrival': The number of packets that arrived after the timeout (example: 'Packet late arrival'=0)
+
+When checking multiple SLA entries at once, the labels are suffixed by the entry-tag.
+For example, checking echo entry 10 and entry 20 would result in 'rtt_10' and 'rtt_20'.
 
 
 ## Examples
