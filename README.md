@@ -30,6 +30,8 @@ the RTT-MIB was installed on the system.
   * Removed sla tag suffix in perf data when checking only one entry
 * v1.1.1 (2017-11-20)
   * Fixed bug regarding dict sorting when using python3 icw parameter "--entries all"
+* v1.1.2 (2020-09-16)
+  * Added support for 'Average Jitter' warning and critical thresholds
 
 
 ## Installation
@@ -67,7 +69,10 @@ usage: check_cisco_ip_sla.py [-h] [--version] [-H HOSTNAME] [-v {1,2,3}]
                              [-m {list,check}] [-e ENTRIES] [--perf]
                              [--critical-pct CRITICAL_PCT]
                              [--warning-pct WARNING_PCT] [--critical CRITICAL]
-                             [--warning WARNING] [--critical-mos CRITICAL_MOS]
+                             [--warning WARNING]
+                             [--critical-jitter CRITICAL_JITTER]
+                             [--warning-jitter WARNING_JITTER]
+                             [--critical-mos CRITICAL_MOS]
                              [--warning-mos WARNING_MOS]
                              [--critical-icpif CRITICAL_ICPIF]
                              [--warning-icpif WARNING_ICPIF]
@@ -120,6 +125,12 @@ optional arguments:
                         (default '50')
   --critical CRITICAL   Critical threshold in amount of failed SLAs
   --warning WARNING     Warning threshold in amount of failed SLAs
+  --critical-jitter CRITICAL_JITTER
+                        Critical threshold for the Average Jitter value of
+                        jitter SLAs
+  --warning-jitter WARNING_JITTER
+                        Warning threshold for the Average Jitter value of
+                        jitter SLAs
   --critical-mos CRITICAL_MOS
                         Critical threshold for the MOS value of jitter SLAs
                         (1.00 .. 5.00)
@@ -131,7 +142,6 @@ optional arguments:
   --warning-icpif WARNING_ICPIF
                         Warning threshold for the ICPIF value of jitter SLAs
   --verbose {0,1,2}     Verbose output
-
 ```
 
 
