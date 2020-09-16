@@ -19,7 +19,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 __email__ = "maarten@hoogveld.org"
 __licence__ = "GPL-3.0"
 __status__ = "Production"
@@ -139,6 +139,10 @@ class CiscoIpSlaChecker:
                             default=None, type=int, help="Critical threshold in amount of failed SLAs")
         parser.add_argument("--warning",
                             default=None, type=int, help="Warning threshold in amount of failed SLAs")
+        parser.add_argument("--critical-jitter",
+                            default=None, type=int, help="Critical threshold for the Average Jitter value of jitter SLAs")
+        parser.add_argument("--warning-jitter",
+                            default=None, type=int, help="Warning threshold for the Average Jitter value of jitter SLAs")
         parser.add_argument("--critical-mos",
                             default=None, type=Decimal,
                             help="Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
@@ -169,30 +173,32 @@ class CiscoIpSlaChecker:
             print("Run with --help for usage information")
             print("")
             exit(0)
-
+            
         self.print_msg(self.V_DEBUG, "Using parameters:")
-        self.print_msg(self.V_DEBUG, " Hostname:        {}".format(self.options.hostname))
-        self.print_msg(self.V_DEBUG, " SNMP-version:    {}".format(self.options.snmp_version))
-        self.print_msg(self.V_DEBUG, " Community:       {}".format(self.options.community))
-        self.print_msg(self.V_DEBUG, " Security-name:   {}".format(self.options.security_name))
-        self.print_msg(self.V_DEBUG, " Security-level:  {}".format(self.options.security_level))
-        self.print_msg(self.V_DEBUG, " Password:        {}".format(self.options.password))
-        self.print_msg(self.V_DEBUG, " Auth-protocol:   {}".format(self.options.auth_protocol))
-        self.print_msg(self.V_DEBUG, " Auth-password:   {}".format(self.options.auth_password))
-        self.print_msg(self.V_DEBUG, " Priv-protocol:   {}".format(self.options.priv_protocol))
-        self.print_msg(self.V_DEBUG, " Priv-password:   {}".format(self.options.priv_password))
-        self.print_msg(self.V_DEBUG, " Mode:            {}".format(self.options.mode))
-        self.print_msg(self.V_DEBUG, " SLA entries:     {}".format(self.options.entries))
-        self.print_msg(self.V_DEBUG, " Perf-data:       {}".format(self.options.perf))
-        self.print_msg(self.V_DEBUG, " Critical-pct:    {}".format(self.options.critical_pct))
-        self.print_msg(self.V_DEBUG, " Warning-pct:     {}".format(self.options.warning_pct))
-        self.print_msg(self.V_DEBUG, " Critical:        {}".format(self.options.critical))
-        self.print_msg(self.V_DEBUG, " Warning:         {}".format(self.options.warning))
-        self.print_msg(self.V_DEBUG, " Critical MOS:    {}".format(self.options.critical_mos))
-        self.print_msg(self.V_DEBUG, " Warning MOS:     {}".format(self.options.warning_mos))
-        self.print_msg(self.V_DEBUG, " Critical ICPIF:  {}".format(self.options.critical_icpif))
-        self.print_msg(self.V_DEBUG, " Warning ICPIF:   {}".format(self.options.warning_icpif))
-        self.print_msg(self.V_DEBUG, " Verbosity:       {}".format(self.options.verbose))
+        self.print_msg(self.V_DEBUG, " Hostname:                {}".format(self.options.hostname))
+        self.print_msg(self.V_DEBUG, " SNMP-version:            {}".format(self.options.snmp_version))
+        self.print_msg(self.V_DEBUG, " Community:               {}".format(self.options.community))
+        self.print_msg(self.V_DEBUG, " Security-name:           {}".format(self.options.security_name))
+        self.print_msg(self.V_DEBUG, " Security-level:          {}".format(self.options.security_level))
+        self.print_msg(self.V_DEBUG, " Password:                {}".format(self.options.password))
+        self.print_msg(self.V_DEBUG, " Auth-protocol:           {}".format(self.options.auth_protocol))
+        self.print_msg(self.V_DEBUG, " Auth-password:           {}".format(self.options.auth_password))
+        self.print_msg(self.V_DEBUG, " Priv-protocol:           {}".format(self.options.priv_protocol))
+        self.print_msg(self.V_DEBUG, " Priv-password:           {}".format(self.options.priv_password))
+        self.print_msg(self.V_DEBUG, " Mode:                    {}".format(self.options.mode))
+        self.print_msg(self.V_DEBUG, " SLA entries:             {}".format(self.options.entries))
+        self.print_msg(self.V_DEBUG, " Perf-data:               {}".format(self.options.perf))
+        self.print_msg(self.V_DEBUG, " Critical-pct:            {}".format(self.options.critical_pct))
+        self.print_msg(self.V_DEBUG, " Warning-pct:             {}".format(self.options.warning_pct))
+        self.print_msg(self.V_DEBUG, " Critical:                {}".format(self.options.critical))
+        self.print_msg(self.V_DEBUG, " Warning:                 {}".format(self.options.warning))
+        self.print_msg(self.V_DEBUG, " Critical Average Jitter: {}".format(self.options.critical_jitter))
+        self.print_msg(self.V_DEBUG, " Warning Average Jitter:  {}".format(self.options.warning_jitter))
+        self.print_msg(self.V_DEBUG, " Critical MOS:            {}".format(self.options.critical_mos))
+        self.print_msg(self.V_DEBUG, " Warning MOS:             {}".format(self.options.warning_mos))
+        self.print_msg(self.V_DEBUG, " Critical ICPIF:          {}".format(self.options.critical_icpif))
+        self.print_msg(self.V_DEBUG, " Warning ICPIF:           {}".format(self.options.warning_icpif))
+        self.print_msg(self.V_DEBUG, " Verbosity:               {}".format(self.options.verbose))
         self.print_msg(self.V_DEBUG, "")
 
     def are_options_valid(self):
@@ -728,7 +734,19 @@ class CiscoIpSlaChecker:
         if not latest_jitter["ntp_sync"]:
             self.add_status(self.STATUS_WARNING)
             self.add_message("NTP not synced between source and destination for SLA {0}".format(rtt_id))
-
+            
+        # Check Average Jitter thresholds (if set)
+        if self.options.critical_jitter is not None or self.options.warning_jitter is not None:
+            if latest_jitter["avg_jitter"] is None:
+                self.add_status(self.STATUS_UNKNOWN)
+                self.add_message("Average Jitter not known for SLA {0}, but threshold is set".format(rtt_id))
+            elif self.options.critical_jitter is not None and latest_jitter["avg_jitter"] > self.options.critical_jitter:
+                self.add_status(self.STATUS_CRITICAL)
+                self.add_message("Average Jitter is over critical threshold for SLA {0}".format(rtt_id))
+            elif self.options.warning_jitter is not None and latest_jitter["avg_jitter"] > self.options.warning_jitter:
+                self.add_status(self.STATUS_WARNING)
+                self.add_message("Average Jitter is over warning threshold for SLA {0}".format(rtt_id))
+                
         # Check MOS thresholds (if set)
         if self.options.critical_mos is not None or self.options.warning_mos is not None:
             if latest_jitter["MOS"] is None:
