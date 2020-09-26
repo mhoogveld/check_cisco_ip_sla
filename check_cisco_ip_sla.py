@@ -140,9 +140,11 @@ class CiscoIpSlaChecker:
         parser.add_argument("--warning",
                             default=None, type=int, help="Warning threshold in amount of failed SLAs")
         parser.add_argument("--critical-jitter",
-                            default=None, type=int, help="Critical threshold for the Average Jitter value of jitter SLAs")
+                            default=None, type=int,
+                            help="Critical threshold for the Average Jitter value of jitter SLAs")
         parser.add_argument("--warning-jitter",
-                            default=None, type=int, help="Warning threshold for the Average Jitter value of jitter SLAs")
+                            default=None, type=int,
+                            help="Warning threshold for the Average Jitter value of jitter SLAs")
         parser.add_argument("--critical-mos",
                             default=None, type=Decimal,
                             help="Critical threshold for the MOS value of jitter SLAs (1.00 .. 5.00)")
@@ -173,7 +175,7 @@ class CiscoIpSlaChecker:
             print("Run with --help for usage information")
             print("")
             exit(0)
-            
+
         self.print_msg(self.V_DEBUG, "Using parameters:")
         self.print_msg(self.V_DEBUG, " Hostname:                {}".format(self.options.hostname))
         self.print_msg(self.V_DEBUG, " SNMP-version:            {}".format(self.options.snmp_version))
@@ -734,19 +736,21 @@ class CiscoIpSlaChecker:
         if not latest_jitter["ntp_sync"]:
             self.add_status(self.STATUS_WARNING)
             self.add_message("NTP not synced between source and destination for SLA {0}".format(rtt_id))
-            
+
         # Check Average Jitter thresholds (if set)
         if self.options.critical_jitter is not None or self.options.warning_jitter is not None:
             if latest_jitter["avg_jitter"] is None:
                 self.add_status(self.STATUS_UNKNOWN)
                 self.add_message("Average Jitter not known for SLA {0}, but threshold is set".format(rtt_id))
-            elif self.options.critical_jitter is not None and latest_jitter["avg_jitter"] > self.options.critical_jitter:
+            elif self.options.critical_jitter is not None \
+                    and latest_jitter["avg_jitter"] >= self.options.critical_jitter:
                 self.add_status(self.STATUS_CRITICAL)
                 self.add_message("Average Jitter is over critical threshold for SLA {0}".format(rtt_id))
-            elif self.options.warning_jitter is not None and latest_jitter["avg_jitter"] > self.options.warning_jitter:
+            elif self.options.warning_jitter is not None \
+                    and latest_jitter["avg_jitter"] >= self.options.warning_jitter:
                 self.add_status(self.STATUS_WARNING)
                 self.add_message("Average Jitter is over warning threshold for SLA {0}".format(rtt_id))
-                
+
         # Check MOS thresholds (if set)
         if self.options.critical_mos is not None or self.options.warning_mos is not None:
             if latest_jitter["MOS"] is None:
