@@ -19,7 +19,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 __email__ = "maarten@hoogveld.org"
 __licence__ = "GPL-3.0"
 __status__ = "Production"

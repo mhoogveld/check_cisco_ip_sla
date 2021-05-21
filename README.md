@@ -32,15 +32,33 @@ the RTT-MIB was installed on the system.
   * Fixed bug regarding dict sorting when using python3 icw parameter "--entries all"
 * v1.1.2 (2020-09-16)
   * Added support for 'Average Jitter' warning and critical thresholds
+* v1.1.3 (2021-05-21)
+  * Fix for certain devices missing some OIDs. (Thanks to Luca Lesinigo for reporting and providing a fix) 
 
 
 ## Installation
-Requirements:
-* Python version 2 or 3 (tested on 2.7+ or 3.4+)
+**Requirements**
+* Python version 2 or 3 (tested on 2.7+ and 3.4+, please read instructiuons below for 3.7+)
 * easysnmp (lightweight and fast snmp library for python, see https://github.com/fgimian/easysnmp)
     See https://easysnmp.readthedocs.org/en/latest/ for installation instructions
 
-Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it
+Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it.
+
+**Easysnmp and Python 3.7+**
+
+Using Python 3.7+, there's a bug in the easysnmp library 
+(see [issue-108](https://github.com/kamakazikamikaze/easysnmp/issues/108)).
+There's a patch by [@nerosketch](https://github.com/nerosketch) which can be used.  
+For example, on Ubuntu 20.04, you could do this:
+```bash
+sudo apt install libsnmp-dev python3-pip
+git clone https://github.com/nerosketch/easysnmp.git
+cd easysnmp
+git checkout fix_is108
+
+# Use with "sudo" for a system-wide install
+pip3 install .
+```
 
 
 ## Usage
