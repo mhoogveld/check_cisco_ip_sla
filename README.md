@@ -38,7 +38,7 @@ the RTT-MIB was installed on the system.
 Requirements:
 * Python version 2 or 3 (tested on 2.7+ or 3.4+)
 * easysnmp (lightweight and fast snmp library for python, see https://github.com/fgimian/easysnmp)
-    See http://easysnmp.readthedocs.org/en/latest/ for installation instructions
+    See https://easysnmp.readthedocs.org/en/latest/ for installation instructions
 
 Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it
 

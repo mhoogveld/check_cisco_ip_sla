@@ -879,13 +879,16 @@ class CiscoIpSlaChecker:
             sla_description = self.get_sla_description(requested_entry)
 
             if self.rtt_dict[requested_entry]["in_active_state"]:
-                if "conn_lost_occurred" in self.rtt_dict[requested_entry] and self.rtt_dict[requested_entry]["conn_lost_occurred"]:
+                if "conn_lost_occurred" in self.rtt_dict[requested_entry] \
+                        and self.rtt_dict[requested_entry]["conn_lost_occurred"]:
                     failed_count += 1
                     messages.append("Connection lost for SLA {0}".format(sla_description))
-                elif "timeout_occurred" in self.rtt_dict[requested_entry] and self.rtt_dict[requested_entry]["timeout_occurred"]:
+                elif "timeout_occurred" in self.rtt_dict[requested_entry] \
+                        and self.rtt_dict[requested_entry]["timeout_occurred"]:
                     failed_count += 1
                     messages.append("Timeout for SLA {0}".format(sla_description))
-                elif "over_thres_occurred" in self.rtt_dict[requested_entry] and self.rtt_dict[requested_entry]["over_thres_occurred"]:
+                elif "over_thres_occurred" in self.rtt_dict[requested_entry] \
+                        and self.rtt_dict[requested_entry]["over_thres_occurred"]:
                     failed_count += 1
                     messages.append("Threshold exceeded for SLA {0}".format(sla_description))
                 else:
