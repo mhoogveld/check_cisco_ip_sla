@@ -258,7 +258,7 @@ class CiscoIpSlaChecker:
         print(output)
 
     def create_snmp_session(self):
-        self.session = Session(
+        kwargs = dict(
             hostname=self.options.hostname,
             version=int(self.options.snmp_version),
             community=self.options.community,
@@ -270,6 +270,13 @@ class CiscoIpSlaChecker:
             privacy_password=self.options.priv_password,
             use_numeric=True,
         )
+
+        if self.options.auth_password is None:
+            kwargs.pop('auth_password')
+        if self.options.priv_password is None:
+            kwargs.pop('privacy_password')
+
+        self.session = Session(**kwargs)
 
     def add_status(self, status):
         """ Set the status only if it is more severe than the present status
