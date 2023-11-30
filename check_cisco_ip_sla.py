@@ -19,7 +19,7 @@ from easysnmp import Session
 from easysnmp.exceptions import *
 
 __author__ = "Maarten Hoogveld"
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 __email__ = "maarten@hoogveld.org"
 __licence__ = "GPL-3.0"
 __status__ = "Production"
@@ -883,13 +883,17 @@ class CiscoIpSlaChecker:
 
         for requested_entry in requested_entries:
             rtt_type = self.rtt_dict[requested_entry]["type"]
+            rtt_type_desc = self.get_rtt_type_description(rtt_type)
             sla_description = self.get_sla_description(requested_entry)
 
             if self.rtt_dict[requested_entry]["in_active_state"]:
                 if "conn_lost_occurred" in self.rtt_dict[requested_entry] \
                         and self.rtt_dict[requested_entry]["conn_lost_occurred"]:
-                    failed_count += 1
-                    messages.append("Connection lost for SLA {0}".format(sla_description))
+                    # conn_lost_occurred only changes for rtt-type 'echo' and 'pathEcho'. Thanks zacsmits (Zak).
+                    # Also see http://oidref.com/1.3.6.1.4.1.9.9.42.1.2.9.1.5
+                    if rtt_type_desc in ["echo", "pathEcho"]:
+                        failed_count += 1
+                        messages.append("Connection lost for SLA {0}".format(sla_description))
                 elif "timeout_occurred" in self.rtt_dict[requested_entry] \
                         and self.rtt_dict[requested_entry]["timeout_occurred"]:
                     failed_count += 1

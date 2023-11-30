@@ -34,19 +34,24 @@ the RTT-MIB was installed on the system.
   * Added support for 'Average Jitter' warning and critical thresholds
 * v1.1.3 (2021-05-21)
   * Fix for certain devices missing some OIDs. (Thanks to Luca Lesinigo for reporting and providing a fix) 
+* v1.1.4 (2023-11-30)
+  * Fix to only check conn_lost_occurred for 'echo' and 'pathEcho' entries, in accordance with 
+    the description of its OID . Thanks to zacsmits (Zac) for reporting and providing a quick fix.
 
 
 ## Installation
 **Requirements**
-* Python version 2 or 3 (tested on 2.7+ and 3.4+, please read instructiuons below for 3.7+)
+* Python version 2 or 3 (tested on 2.7+ and 3.4+)
 * easysnmp (lightweight and fast snmp library for python, see https://github.com/fgimian/easysnmp)
     See https://easysnmp.readthedocs.org/en/latest/ for installation instructions
 
 Place the check script anywhere you'd like (eg /usr/local/lib/nagios/plugins) and run it.
 
-**Easysnmp and Python 3.7+**
+**Easysnmp 0.2.5 and Python 3.7+**
 
-Using Python 3.7+, there's a bug in the easysnmp library 
+**Note:** With the release of easysnmp 0.2.6, the issue below has been resolved.
+
+Using Python 3.7+, there's a bug in the easysnmp library (v 0.2.5) 
 (see [issue-108](https://github.com/kamakazikamikaze/easysnmp/issues/108)).
 There's a patch by [@nerosketch](https://github.com/nerosketch) which can be used.  
 For example, on Ubuntu 20.04, you could do this:
